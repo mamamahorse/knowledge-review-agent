@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Review · 阅读问答</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/practice.css">
+  <script src="/static/app.js" defer></script>
+  <script src="/static/learning.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">K</span><span>Knowledge Review</span></div>
+    <div class="topbar-caption">本地阅读问答工作台 <span class="topbar-dot"></span> 资料优先，引用可查</div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar" aria-label="资料列表">
+      <div class="panel-heading">
+        <div><span class="eyebrow">LIBRARY</span><h2>我的资料</h2></div>
+        <label class="import-button" title="导入 Markdown 笔记">＋<input id="import-files" type="file" accept=".md,text/markdown" multiple hidden></label>
+      </div>
+      <p class="sidebar-hint">默认以当前整篇文档为资料范围。勾选其他资料可一起使用，点击名称打开阅读。</p>
+      <div id="document-list" class="document-list" aria-live="polite"></div>
+      <p id="import-status" class="import-status" role="status"></p>
+      <div class="sidebar-footer">导入的文件保存在本机项目目录中。每次问答仅使用已勾选的资料。</div>
+    </aside>
+
+    <section class="reader-panel" aria-label="笔记阅读器">
+      <div class="reader-toolbar">
+        <div class="reader-title-group"><span class="eyebrow">READING</span><h1 id="document-title">选择一份笔记</h1><p id="document-meta">打开文档后可以在右侧直接提问</p></div>
+        <div class="view-switch" role="group" aria-label="阅读模式">
+          <button id="view-rendered" class="active" type="button">阅读</button>
+          <button id="view-source" type="button">原文行号</button>
+        </div>
+      </div>
+      <div id="reader-scroll" class="reader-scroll">
+        <article id="rendered-note" class="markdown-body"></article>
+        <div id="source-note" class="source-note" hidden></div>
+        <div id="reader-empty" class="reader-empty">从左侧选择一份 Markdown 笔记开始阅读。</div>
+      </div>
+    </section>
+
+    <aside class="answer-panel" aria-label="问答与练习">
+      <label class="response-language-control" for="response-language">
+        <span>回答语言</span>
+        <select id="response-language">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <div class="mode-tabs" role="group" aria-label="学习模式">
+        <button id="mode-ask" type="button" class="active">问答</button>
+        <button id="mode-practice" type="button">练习</button>
+        <button id="mode-learning" type="button">学习计划</button>
+      </div>
+      <section id="ask-view">
+      <div class="panel-heading answer-heading"><div><span class="eyebrow">ASK THE NOTES</span><h2>围绕文档提问</h2></div></div>
+      <div id="selection-card" class="selection-card empty">
+        <span class="selection-label">提问范围 · 选段可选</span>
+        <strong id="selection-range">打开一份文档即可提问</strong>
+        <p id="selection-preview">模型按需要查阅当前文档，选中原文可添加提问焦点。</p>
+        <div id="line-controls" class="line-controls" hidden>
+          <label>从 <input id="line-start" type="number" min="1" aria-label="开始行"> 行</label>
+          <label>到 <input id="line-end" type="number" min="1" aria-label="结束行"> 行</label>
+        </div>
+        <button id="clear-focus" class="clear-focus" type="button" hidden>取消选段，询问整篇</button>
+      </div>
+      <form id="question-form" class="question-form">
+        <label for="question">你的问题</label>
+        <textarea id="question" rows="4" maxlength="4000" placeholder="例如：这篇文档讲了哪些关键机制？它们有什么联系？"></textarea>
+        <label class="strict-toggle"><input id="strict-mode" type="checkbox"><span>仅依据所选资料回答</span></label>
+        <button id="ask-button" class="primary-button" type="submit">开始提问 <span>↗</span></button>
+      </form>
+      <p id="request-status" class="request-status" role="status"></p>
+      <div id="answer-result" class="answer-result" aria-live="polite"></div>
+      </section>
+      <section id="learning-view" hidden>
+        <div class="panel-heading answer-heading"><div><span class="eyebrow">LEARNING PLAN</span><h2>我的学习计划</h2></div></div>
+        <p class="sidebar-hint">选择加入的练习会保存在这里。同一知识点下的不同目标分别安排复习；你可以随时练习或暂停。</p>
+        <p id="learning-status" class="request-status" role="status"></p>
+        <div id="learning-list" aria-live="polite"></div>
+      </section>
+      <section id="practice-view" hidden>
+        <div class="panel-heading answer-heading"><div><span class="eyebrow">PRACTICE</span><h2>从原文开始练习</h2></div></div>
+        <p id="practice-selection" class="practice-selection">先在阅读区选中一段原文。</p>
+        <form id="practice-start-form" class="practice-start-form">
+          <label for="practice-objective">本次学习目标（可选）</label>
+          <input id="practice-objective" maxlength="300" placeholder="例如：理解 epoll 的 ET 模式">
+          <button id="practice-start-button" class="primary-button" type="submit">生成一道题 <span>↗</span></button>
+        </form>
+        <p id="practice-status" class="request-status" role="status"></p>
+        <div class="practice-history-heading"><h3>练习记录</h3><span>关闭页面后可继续</span></div>
+        <div id="practice-list" class="practice-list"></div>
+        <div id="practice-detail" class="practice-detail" aria-live="polite"></div>
+      </section>
+    </aside>
+  </main>
+</body>
+</html>

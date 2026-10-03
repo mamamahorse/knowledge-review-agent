@@ -21,6 +21,8 @@ def main() -> None:
     mode.add_argument("--download-model", action="store_true", help="Download the local embedding model once.")
     parser.add_argument("--rag", action="store_true", help="Retrieve excerpts before answering --question (cloud generation).")
     parser.add_argument("--agent", action="store_true", help="Let the model choose search/read tools before answering --question.")
+    parser.add_argument("--focus", nargs=3, metavar=("NOTE", "START", "END"),
+                        help="With --agent, explain selected original lines in a Markdown file.")
     parser.add_argument("--max-tool-calls", type=int, default=4, help="Agent tool-call budget (1-6; default 4).")
     parser.add_argument("--top-k", type=int, default=3, help="Number of search results.")
     parser.add_argument("--chunk-size", type=int, default=1200, help="Soft chunk size in characters (with --chunks or --search).")
@@ -40,6 +42,8 @@ def main() -> None:
         parser.error("--agent requires --question.")
     if args.agent and args.rag:
         parser.error("--agent and --rag are separate answer modes.")
+    if args.focus and not (args.agent and args.question is not None):
+        parser.error("--focus requires --question and --agent.")
     if not 1 <= args.max_tool_calls <= 6:
         parser.error("--max-tool-calls must be between 1 and 6.")
     if (args.rebuild_index or args.no_cache) and not (args.search is not None or args.rag or args.agent):
@@ -72,7 +76,19 @@ def main() -> None:
         return
     if args.question is not None and not args.question.strip():
         parser.exit(status=1, message="The question must not be blank.\n")
-    paths = args.note or [Path(__file__).resolve().parent / "examples" / "project-notes.md"]
+    focus_path = None
+    focus_start = focus_end = None
+    if args.focus:
+        focus_path = Path(args.focus[0]).resolve()
+        try:
+            focus_start, focus_end = int(args.focus[1]), int(args.focus[2])
+        except ValueError:
+            parser.error("--focus START and END must be integers.")
+    paths = list(args.note)
+    if focus_path is not None:
+        paths.append(focus_path)
+    if not paths:
+        paths = [Path(__file__).resolve().parent / "examples" / "project-notes.md"]
     try:
         sources = load_sources(paths)
     except (OSError, UnicodeError, ValueError) as exc:
@@ -118,16 +134,26 @@ def main() -> None:
     print(f"Question: {args.question}\n", flush=True)
     try:
         if args.agent:
-            from agent_loop import run_agent
+            from agent_loop import focus_on_lines, run_agent
             from knowledge_tools import KnowledgeTools
 
             tools = KnowledgeTools(
                 sources, embedding_config, max_chars=args.chunk_size, min_chars=args.chunk_min,
                 no_cache=args.no_cache, rebuild_index=args.rebuild_index,
             )
+            focus = None
+            if focus_path is not None:
+                source = next(source for source in sources if source.path == focus_path)
+                focus = focus_on_lines(tools, source.source_id, focus_start, focus_end)
+                print(
+                    f"Focus: {source.path} | selected L{focus_start}-L{focus_end} | "
+                    f"visible context L{focus.chunk.line_start}-L{focus.chunk.line_end}",
+                    flush=True,
+                )
             run = run_agent(
                 sources, args.question, tools, strict=args.strict,
                 max_tool_calls=args.max_tool_calls,
+                focus=focus,
             )
             for number, step in enumerate(run.steps, 1):
                 state = f"error: {step.error}" if step.error else "ok"

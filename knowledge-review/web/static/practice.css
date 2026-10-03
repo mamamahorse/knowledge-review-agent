@@ -1,0 +1,55 @@
+.response-language-control{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;font-size:12px;color:#64786b}
+.response-language-control select{font:inherit;color:#315f49;border:1px solid #dfe6de;background:#fff;border-radius:7px;padding:5px 8px;cursor:pointer}
+.response-language-control select:focus{outline:2px solid #a6d3b3;border-color:#82b898}
+.mode-tabs{display:flex;gap:4px;background:#f1f4ef;padding:4px;border-radius:10px;margin-bottom:23px}
+.mode-tabs button{flex:1;border:0;background:transparent;color:#728075;border-radius:7px;padding:9px;font-size:12px;font-weight:700}
+.mode-tabs button.active{background:#fff;color:#286850;box-shadow:0 1px 4px #1f3c3017}
+.practice-selection{background:#f3f8f1;border:1px solid #e0ede0;color:#5b7861;border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;margin:20px 0}
+.practice-start-form label{display:block;font-size:12px;font-weight:700;color:#465b4f;margin-bottom:8px}
+.practice-start-form input{width:100%;border:1px solid #dfe6de;border-radius:9px;padding:10px 12px;font-size:12px;margin-bottom:12px}
+.practice-start-form input:focus,.practice-answer:focus,.practice-correction:focus{outline:2px solid #a6d3b3;border-color:#82b898}
+.practice-history-heading{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #e9eee8;margin-top:18px;padding-top:16px}
+.practice-history-heading h3{font-size:13px;margin:0 0 11px}
+.practice-history-heading span{font-size:10px;color:#97a29a}
+.practice-list{display:flex;gap:7px;overflow:auto;padding-bottom:8px}
+.practice-list button{min-width:150px;max-width:190px;text-align:left;border:1px solid #e0e8df;background:#fbfcfa;border-radius:9px;padding:9px;color:#51675a}
+.practice-list button.active{border-color:#80ae91;background:#edf6eb}
+.practice-list strong{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.practice-list small{display:block;color:#839087;font-size:10px;margin-top:5px}
+.practice-empty{font-size:12px;color:#9ba79d;padding:4px 0}
+.practice-detail{border-top:1px solid #e9eee8;margin-top:14px;padding-top:15px}
+.practice-detail:empty{display:none}
+.practice-title{font-size:15px;margin:0 0 5px;color:#2d4536}
+.practice-state{font-size:11px;color:#7b897e;margin:0 0 14px}
+.practice-question{border:1px solid #e5ece3;border-radius:11px;padding:14px;margin:13px 0;background:#fbfcfa}
+.practice-question.current{border-color:#b8d6b8;background:#f7fbf5}
+.practice-question h4{font-size:11px;color:#5f9170;margin:0 0 7px}
+.practice-question .prompt{font-size:13px;line-height:1.7;margin:0 0 12px;color:#2d4236}
+.practice-question .citation{font-size:10px;margin:5px 0}
+.practice-question .citation small{display:block}
+.practice-label{display:block;font-size:11px;font-weight:700;color:#526458;margin:13px 0 7px}
+.practice-answer,.practice-correction{width:100%;border:1px solid #dfe6de;border-radius:8px;padding:10px;font-size:12px;line-height:1.6;resize:vertical;min-height:90px}
+.practice-correction{min-height:60px}
+.practice-action{border:0;border-radius:8px;background:#2f7658;color:#fff;padding:9px 12px;font-size:11px;font-weight:700;margin-top:9px}
+.practice-action.secondary{background:#e8f1e9;color:#2f7658}
+.practice-action:disabled{opacity:.6;cursor:wait}
+.practice-response,.practice-feedback,.practice-teaching{font-size:12px;line-height:1.7;white-space:pre-wrap;color:#4f6255;margin:8px 0}
+.practice-feedback{color:#344b3a}
+.practice-answer-quote{font-size:11px;line-height:1.6;color:#54735d;background:#edf5ea;border-left:2px solid #9bc6a2;padding:5px 8px;margin:5px 0;white-space:pre-wrap}
+.practice-rating{display:inline-block;font-size:10px;color:#42765a;background:#e6f3e8;border-radius:6px;padding:4px 7px;margin:5px 0}
+.rubric-list{padding-left:18px;font-size:11px;color:#66756a;line-height:1.6}
+.rubric-list li{margin:4px 0}
+.rubric-list li.covered{color:#2e7b55}
+.rubric-list li.missing{color:#ae704b}
+.practice-correction-note{font-size:11px;color:#6e7f72;background:#f1f5ee;border-radius:7px;padding:8px;margin:9px 0}
+.practice-finish{border:1px solid #ccdccc;background:#fff;color:#477258;border-radius:7px;padding:8px 10px;font-size:11px;margin-top:8px}
+.knowledge-group{border-top:1px solid #dde8dd;padding:16px 0;margin-top:12px}
+.knowledge-group h3{font-size:16px;color:#315c42;margin:0 0 10px}
+.learning-item{background:#f7fbf5;border:1px solid #dce8d8;border-radius:12px;padding:14px;margin:12px 0}
+.learning-item h4{font-size:13px;line-height:1.6;margin:7px 0;color:#2d4236}
+.learning-actions{display:flex;flex-wrap:wrap;gap:6px}
+.learning-select{max-width:100%;border:1px solid #d5e1d3;border-radius:7px;padding:7px;font-size:11px;background:#fff;color:#44694e;margin:7px 5px 0 0}
+.learning-details{font-size:11px;line-height:1.6;margin-top:13px;color:#556c5b}
+.learning-details summary{cursor:pointer;color:#386f4c;padding:5px 0}
+.learning-enroll{border-top:1px solid #e0e9dd;margin-top:13px;padding-top:5px}
+.learning-details .practice-correction{margin-top:8px}

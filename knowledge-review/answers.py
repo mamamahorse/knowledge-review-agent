@@ -3,7 +3,7 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sources import Source
 from chunking import Chunk
 from context import citation_is_visible, validate_chunks
@@ -14,21 +14,36 @@ class StrictModel(BaseModel):
 
 
 class Citation(StrictModel):
-    source_id: str
-    line_start: int
-    line_end: int
+    source_id: str = Field(description="Identity of the supplied source version supporting this content.")
+    line_start: int = Field(description="First original source line in the supporting visible excerpt, 1-based.")
+    line_end: int = Field(description="Last original source line in the supporting visible excerpt, inclusive.")
 
 
 class AnswerBlock(StrictModel):
-    kind: Literal["grounded", "inference", "supplement"]
-    text: str
-    citations: list[Citation]
+    kind: Literal["grounded", "inference", "supplement"] = Field(description=(
+        "grounded reports source content; inference explains a conclusion and its assumptions "
+        "from source premises; supplement is unverified background knowledge."
+    ))
+    text: str = Field(description="Explanation for the learner; source references are represented separately.")
+    citations: list[Citation] = Field(description="Source evidence for grounded/inference content; empty for background knowledge.")
 
 
 class NoteAnswer(StrictModel):
-    coverage: Literal["sufficient", "partial", "none"]
-    coverage_note: str
+    coverage: Literal["sufficient", "partial", "none"] = Field(description="How well the supplied evidence supports the requested answer.")
+    coverage_note: str = Field(description="Explanation of partial or missing evidence, including unknown private facts.")
     blocks: list[AnswerBlock]
+
+
+class SourceAnswerBlock(AnswerBlock):
+    kind: Literal["grounded", "inference"] = Field(
+        description="Source content or a conclusion drawn from visible source premises.",
+    )
+    citations: list[Citation] = Field(min_length=1, description="Visible source evidence supporting this content.")
+
+
+class SourceOnlyAnswer(NoteAnswer):
+    """The strict-mode API contract excludes background knowledge at generation."""
+    blocks: list[SourceAnswerBlock]
 
 
 def validate_answer(

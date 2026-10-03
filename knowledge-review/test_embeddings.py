@@ -1,10 +1,13 @@
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from chunking import Chunk
 from embeddings import LocalEmbedder
 from embedding_config import EmbeddingConfig, select_embedding_config, effective_token_limit
+from context import validate_chunks
+from sources import Source
 
 
 class EmbeddingTests(unittest.TestCase):
@@ -30,10 +33,58 @@ class EmbeddingTests(unittest.TestCase):
     def test_no_silent_truncation(self):
         self.embedder.model.tokenizer.return_value = {"input_ids": list(range(513))}
         with self.assertRaisesRegex(ValueError, "L5-L7"):
-            self.embedder.embed_chunks([self.chunk])
+            self.embedder._encode([self.chunk.text], ["Chunk chunk (L5-L7)"])
         self.embedder.model.encode.assert_not_called()
         with self.assertRaisesRegex(ValueError, "Query"):
-            self.embedder.embed_query("too long")
+            self.embedder._encode(["too long"], ["Query"])
+
+    def character_tokenizer(self, limit=48):
+        self.embedder.max_tokens = limit
+        self.embedder.model.tokenizer.side_effect = lambda text, **kwargs: {
+            "input_ids": list(range(len(text) + 2)),
+        }
+        self.embedder.model.encode.side_effect = lambda texts, **kwargs: SimpleNamespace(
+            tolist=lambda: [[1.0, 0.0] for _ in texts],
+        )
+
+    def test_long_single_line_and_query_keep_all_text_in_bounded_windows(self):
+        self.character_tokenizer()
+        body = "中文 TCP ACK SEQ 代码😀" * 20 + "末尾独有事实"
+        chunk = Chunk("long", "source", (), 1, 1, body)
+        self.assertEqual(self.embedder.embed_chunks([chunk]), [[1.0, 0.0]])
+        sent = self.embedder.model.encode.call_args.args[0]
+        self.assertGreater(len(sent), 1)
+        self.assertTrue(all(text.startswith("passage: ") for text in sent))
+        self.assertTrue(all(len(text) + 2 <= 48 for text in sent))
+        self.assertEqual("".join(text[len("passage: "):] for text in sent), body)
+        self.assertEqual(chunk.text, body)
+        self.embedder.embed_query(body)
+        sent = self.embedder.model.encode.call_args.args[0]
+        self.assertTrue(all(text.startswith("query: ") for text in sent))
+        self.assertTrue(all(len(text) + 2 <= 48 for text in sent))
+        self.assertEqual("".join(text[len("query: "):] for text in sent), body)
+
+    def test_long_code_block_splits_into_exact_original_line_ranges(self):
+        self.character_tokenizer(limit=64)
+        lines = ["# Code", "```py"] + [f"print('中文内容{i}')" for i in range(12)] + ["```"]
+        source = Source("source", Path("code.md"), "\n".join(lines))
+        chunk = Chunk("block", "source", ("Code",), 1, len(lines), source.text)
+        parts = self.embedder.prepare_chunks([chunk])
+        self.assertGreater(len(parts), 1)
+        validate_chunks(parts, [source])
+        self.assertEqual("\n".join(part.text for part in parts), source.text)
+        self.assertEqual(parts[0].line_start, 1)
+        self.assertEqual(parts[-1].line_end, len(lines))
+        self.assertTrue(all(self.embedder.fits("passage: Code\n" + part.text) for part in parts))
+        self.assertEqual(len(self.embedder.embed_chunks(parts)), len(parts))
+
+    def test_long_heading_is_encoded_completely_with_its_body(self):
+        self.character_tokenizer()
+        chunk = Chunk("heading", "source", ("超长标题" * 40,), 1, 1, "末尾正文")
+        self.embedder.embed_chunks([chunk])
+        sent = self.embedder.model.encode.call_args.args[0]
+        self.assertEqual("".join(text[len("passage: "):] for text in sent),
+                         "超长标题" * 40 + "\n末尾正文")
 
     def test_empty_inputs(self):
         self.assertEqual(self.embedder.embed_chunks([]), [])
@@ -92,7 +143,7 @@ class EmbeddingTests(unittest.TestCase):
         self.embedder.model.encode.reset_mock()
         self.embedder.model.tokenizer.return_value = {"input_ids": list(range(129))}
         with self.assertRaisesRegex(ValueError, "128"):
-            self.embedder.embed_query("Question")
+            self.embedder._encode(["Question"], ["Query"])
         self.embedder.model.encode.assert_not_called()
 
 

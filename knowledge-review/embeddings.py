@@ -2,7 +2,8 @@
 
 import os
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from math import sqrt
 from hashlib import sha256
 from importlib.metadata import version
 from pathlib import Path
@@ -66,22 +67,21 @@ class LocalEmbedder:
                 fingerprint.update(f"{name}:{tensor.dtype}:{tuple(tensor.shape)}".encode("utf-8"))
                 fingerprint.update(tensor.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes())
             self._cache_profile = {
-                "format": "local-embedding-v1", "config": asdict(self.config),
+                "format": "local-embedding-v2-token-windows", "config": asdict(self.config),
                 "max_tokens": self.max_tokens, "model_fingerprint": fingerprint.hexdigest(),
                 "runtime": {name: version(name) for name in ("sentence-transformers", "transformers", "torch", "tokenizers")},
             }
         return self._cache_profile
 
     def _encode(self, texts: list[str], labels: list[str]) -> list[list[float]]:
-        # SentenceTransformer normally truncates. Reject oversized input first.
+        # A final guard: every automatically prepared window must fit exactly.
         for text, label in zip(texts, labels, strict=True):
-            tokens = self.model.tokenizer(text, truncation=False, add_special_tokens=True)["input_ids"]
+            tokens = self.model.tokenizer(text, truncation=False, add_special_tokens=True, verbose=False)["input_ids"]
             if len(tokens) > self.max_tokens:
                 raise ValueError(
                     f"{label}: {len(tokens)} tokens exceeds active limit {self.max_tokens} "
                     f"for {self.config.model_name}. "
-                    "Use a smaller --chunk-size or divide the long paragraph/code block; "
-                    "shorten the query if the query exceeds the limit. Nothing was truncated."
+                    "Embedding window preparation failed; no text was truncated."
                 )
         return self.model.encode(
             texts, batch_size=16, normalize_embeddings=True,
@@ -89,15 +89,95 @@ class LocalEmbedder:
             prompt="",  # Prefixes are already included; suppress saved default prompts.
         ).tolist()
 
+    def fits(self, text: str) -> bool:
+        return len(self.model.tokenizer(
+            text, truncation=False, add_special_tokens=True, verbose=False,
+        )["input_ids"]) <= self.max_tokens
+
+    def prepare_chunks(self, chunks: list[Chunk]) -> list[Chunk]:
+        """Split oversized Markdown blocks at original line boundaries for retrieval."""
+        result = []
+        for chunk in chunks:
+            if self.fits(passage_text(chunk, self.config.passage_prefix)):
+                result.append(chunk)
+                continue
+            lines = chunk.text.split("\n")
+            start = 0
+            while start < len(lines):
+                def part(end):
+                    first, last = chunk.line_start + start, chunk.line_start + end - 1
+                    identity = f"{chunk.chunk_id}:token-lines-v1:{first}:{last}"
+                    return replace(chunk, chunk_id=sha256(identity.encode()).hexdigest(),
+                                   line_start=first, line_end=last,
+                                   text="\n".join(lines[start:end]))
+
+                # A single long line is kept intact for honest line-based citations.
+                # Its embedding uses complete text windows rather than truncation.
+                end = start + 1
+                low, high = end, len(lines)
+                while low <= high:
+                    mid = (low + high) // 2
+                    if self.fits(passage_text(part(mid), self.config.passage_prefix)):
+                        end, low = mid, mid + 1
+                    else:
+                        high = mid - 1
+                result.append(part(end))
+                start = end
+        return result
+
+    def _windows(self, body: str, prefix: str) -> list[str]:
+        """Keep every original character, repeating the model's role prefix."""
+        if self.fits(prefix + body):
+            return [prefix + body]
+        result = []
+        start = 0
+        while start < len(body):
+            low, high, end = start + 1, len(body), start
+            while low <= high:
+                mid = (low + high) // 2
+                if self.fits(prefix + body[start:mid]):
+                    end, low = mid, mid + 1
+                else:
+                    high = mid - 1
+            if end == start:
+                raise ValueError("The embedding token limit cannot hold the role prefix and one character.")
+            result.append(prefix + body[start:end])
+            start = end
+        return result
+
+    def _encode_complete(self, bodies: list[str], prefix: str, labels: list[str]) -> list[list[float]]:
+        windows, groups = [], []
+        for body in bodies:
+            pieces = self._windows(body, prefix)
+            groups.append((len(windows), len(pieces)))
+            windows.extend(pieces)
+        window_labels = [label for label, (_, count) in zip(labels, groups, strict=True)
+                         for _ in range(count)]
+        vectors = self._encode(windows, window_labels)
+        result = []
+        for start, count in groups:
+            if count == 1:
+                result.append(vectors[start])
+                continue
+            weights = [len(text) - len(prefix) for text in windows[start:start + count]]
+            pooled = [sum(vector[d] * weight for vector, weight in
+                          zip(vectors[start:start + count], weights, strict=True)) / sum(weights)
+                      for d in range(len(vectors[start]))]
+            norm = sqrt(sum(value * value for value in pooled))
+            if norm == 0:
+                raise ValueError("Embedding windows produced a zero vector.")
+            result.append([value / norm for value in pooled])
+        return result
+
     def embed_chunks(self, chunks: list[Chunk]) -> list[list[float]]:
         if not chunks:
             return []
-        return self._encode(
-            [passage_text(chunk, self.config.passage_prefix) for chunk in chunks],
+        return self._encode_complete(
+            [passage_text(chunk, "") for chunk in chunks], self.config.passage_prefix,
             [f"Chunk {chunk.chunk_id[:12]} (L{chunk.line_start}-L{chunk.line_end})" for chunk in chunks],
         )
 
     def embed_query(self, question: str) -> list[float]:
         if not question.strip():
             raise ValueError("The search query must not be blank.")
-        return self._encode([f"{self.config.query_prefix}{question.strip()}"], ["Query"])[0]
+        return self._encode_complete([question.strip()], self.config.query_prefix, ["Query"])[0]

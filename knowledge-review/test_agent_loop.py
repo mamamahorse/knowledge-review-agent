@@ -6,14 +6,16 @@ from unittest.mock import Mock, patch
 import httpx
 from openai import OpenAI
 
-from agent_loop import run_agent
+from agent_loop import focus_on_lines, run_agent
 from embedding_config import select_embedding_config
 from knowledge_tools import KnowledgeTools
 from sources import Source
+from structured_output import FUNCTION_OUTPUT_PROVIDERS
 
 
 class AgentLoopTests(unittest.TestCase):
     def setUp(self):
+        FUNCTION_OUTPUT_PROVIDERS.clear()
         self.source = Source("doc-a", Path("notes.md"), "# Alpha\n\nVisible fact.\n\n# Secret\n\nHIDDEN")
         self.sources = [self.source]
         embedder = Mock()
@@ -158,6 +160,89 @@ class AgentLoopTests(unittest.TestCase):
         result = self.run_script(respond, strict=True)
         self.assertEqual(result.visible_chunks, ())
         self.assertEqual(result.answer.coverage, "none")
+        self.tools.embedder.embed_query.assert_not_called()
+        self.tools.embedder.embed_chunks.assert_not_called()
+
+    def test_selected_lines_are_visible_before_tools_and_in_final_answer(self):
+        focus = focus_on_lines(self.tools, "doc-a", 3, 3, context_lines=0)
+        requests = []
+
+        def respond(request):
+            body = json.loads(request.content)
+            requests.append(body)
+            prompt = body["messages"][1]["content"]
+            self.assertIn("User-selected lines: source_id=doc-a, L3-L3", prompt)
+            self.assertIn("[L3] Visible fact.", prompt)
+            self.assertNotIn("HIDDEN", prompt)
+            if "tools" in body:
+                return self.completion({"role": "assistant", "content": "READY"})
+            return self.completion({"role": "assistant", "content": json.dumps({
+                "coverage": "sufficient", "coverage_note": "", "blocks": [{
+                    "kind": "grounded", "text": "Visible fact.", "citations": [
+                        {"source_id": "doc-a", "line_start": 3, "line_end": 3},
+                    ],
+                }],
+            })})
+
+        result = self.run_script(respond, strict=True, focus=focus)
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(result.steps, ())
+        self.assertEqual(result.visible_chunks, (focus.chunk,))
+        self.assertEqual(result.answer.blocks[0].citations[0].line_start, 3)
+        self.tools.embedder.embed_query.assert_not_called()
+        self.tools.embedder.embed_chunks.assert_not_called()
+
+    def test_focus_validates_source_lines_and_context_limit(self):
+        for source_id, start, end in [("missing", 1, 1), ("doc-a", 0, 1),
+                                      ("doc-a", 3, 2), ("doc-a", 3, 99)]:
+            with self.subTest(source_id=source_id, start=start, end=end), self.assertRaises(ValueError):
+                focus_on_lines(self.tools, source_id, start, end)
+        focus = focus_on_lines(self.tools, "doc-a", 3, 3)
+        self.assertEqual((focus.chunk.line_start, focus.chunk.line_end), (1, 7))
+
+    def test_general_answer_does_not_load_embedding_model_or_search(self):
+        self.tools._embedder = None
+        def respond(request):
+            body = json.loads(request.content)
+            self.assertNotIn('Visible fact.', str(body['messages']))
+            if 'tools' in body:
+                self.assertEqual(body['tool_choice'], 'auto')
+                return self.completion({'role': 'assistant', 'content': 'READY'})
+            return self.completion({'role': 'assistant', 'content': json.dumps({
+                'coverage': 'none', 'coverage_note': 'A general response without source evidence.', 'blocks': [{
+                    'kind': 'supplement', 'text': 'General background explanation.', 'citations': [],
+                }],
+            })})
+        with patch('knowledge_tools.LocalEmbedder', side_effect=RuntimeError('Unavailable')) as loader:
+            result = self.run_script(respond)
+        loader.assert_not_called()
+        self.assertEqual(result.steps, ())
+        self.assertEqual(result.visible_chunks, ())
+        self.assertIsNone(self.tools._embedder)
+
+    def test_model_can_read_missing_evidence_without_semantic_search(self):
+        self.tools.embedder.embed_query.side_effect = RuntimeError('Local model unavailable')
+        requests = []
+        def respond(request):
+            body = json.loads(request.content)
+            requests.append(body)
+            if len(requests) == 1:
+                return self.completion({'role': 'assistant', 'content': None, 'tool_calls': [
+                    self.call('read', 'read_source', {'source_id': 'doc-a', 'line_start': 3, 'line_end': 3}),
+                ]}, 'tool_calls')
+            if 'tools' in body:
+                return self.completion({'role': 'assistant', 'content': 'READY'})
+            return self.completion({'role': 'assistant', 'content': json.dumps({
+                'coverage': 'sufficient', 'coverage_note': '', 'blocks': [{
+                    'kind': 'grounded', 'text': 'Visible fact.', 'citations': [
+                        {'source_id': 'doc-a', 'line_start': 3, 'line_end': 3},
+                    ],
+                }],
+            })})
+        result = self.run_script(respond, strict=True)
+        self.assertEqual([step.name for step in result.steps], ['read_source'])
+        self.tools.embedder.embed_query.assert_not_called()
+        self.tools.embedder.embed_chunks.assert_not_called()
 
 
 if __name__ == "__main__":

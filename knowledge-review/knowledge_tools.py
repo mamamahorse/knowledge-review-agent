@@ -97,11 +97,16 @@ class KnowledgeTools:
         return self._embedder
 
     def search_notes(self, query: str, top_k: int = 3) -> SearchResult:
+        # Using vector similarity to find top_k chunks.
         if not isinstance(query, str) or not query.strip():
             raise ValueError("search_notes query must not be blank.")
         if type(top_k) is not int or not 1 <= top_k <= MAX_SEARCH_RESULTS:
             raise ValueError(f"search_notes top_k must be between 1 and {MAX_SEARCH_RESULTS}.")
         query_vector = self.embedder.embed_query(query)
+        # Custom embedders may provide their own preparation; constructor mocks
+        # and older adapters remain usable without depending on a concrete type.
+        if self._vectors is None and callable(getattr(type(self.embedder), "prepare_chunks", None)):
+            self.chunks = self.embedder.prepare_chunks(self.chunks)
         memory_hit = self._vectors is not None
         if memory_hit:
             vectors = self._vectors
@@ -126,6 +131,7 @@ class KnowledgeTools:
         )
 
     def read_source(self, source_id: str, line_start: int, line_end: int) -> ReadResult:
+        # Read an exact inclusive line range from a source version returned by search_notes
         if not isinstance(source_id, str) or not source_id:
             raise ValueError("read_source requires an exact source_id.")
         if type(line_start) is not int or type(line_end) is not int:

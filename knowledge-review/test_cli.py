@@ -46,8 +46,46 @@ class CliTests(unittest.TestCase):
             self.assertNotEqual(self.run_cli(*args).returncode, 0)
         for args in [("--rag",), ("--rag", "--search", "test"),
                      ("--agent",), ("--agent", "--question", "test", "--rag"),
-                     ("--agent", "--question", "test", "--max-tool-calls", "0")]:
+                     ("--agent", "--question", "test", "--max-tool-calls", "0"),
+                     ("--focus", "note.md", "1", "2"),
+                     ("--agent", "--question", "test", "--focus", "note.md", "x", "2")]:
             self.assertNotEqual(self.run_cli(*args).returncode, 0)
+
+    def test_focus_loads_selected_note_and_passes_original_context_to_agent(self):
+        import main
+        from agent_loop import AgentRun
+        from answers import NoteAnswer
+
+        class Output(io.StringIO):
+            def reconfigure(self, **kwargs):
+                pass
+
+        with temporary_notes() as directory:
+            focus_path = directory / "focus.md"
+            other_path = directory / "other.md"
+            focus_path.write_text("# Focus\n\nSelected idea.\n\nLast line.", encoding="utf-8")
+            other_path.write_text("# Other\n\nRelated idea.", encoding="utf-8")
+            with patch("agent_loop.run_agent") as agent:
+                agent.return_value = AgentRun(
+                    NoteAnswer(coverage="none", coverage_note="No answer.", blocks=[]),
+                    (), "model_finished", (),
+                )
+                output = Output()
+                argv = [str(ENTRY), str(other_path), "--question", "Explain this",
+                        "--agent", "--focus", str(focus_path), "3", "3"]
+                with patch.object(sys, "argv", argv), redirect_stdout(output):
+                    main.main()
+                sources = agent.call_args.args[0]
+                focus = agent.call_args.kwargs["focus"]
+                self.assertEqual({source.path for source in sources}, {focus_path, other_path})
+                self.assertEqual((focus.line_start, focus.line_end), (3, 3))
+                self.assertIn("Selected idea.", focus.chunk.text)
+                self.assertIn("selected L3-L3", output.getvalue())
+
+            invalid = self.run_cli("--question", "Explain", "--agent",
+                                   "--focus", focus_path, "3", "99")
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("outside the source", invalid.stderr)
 
     def test_agent_mode_passes_budget_and_displays_trace(self):
         import main
