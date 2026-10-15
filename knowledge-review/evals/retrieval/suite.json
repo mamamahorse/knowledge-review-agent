@@ -1,0 +1,989 @@
+{
+  "revision": "retrieval-pilot-v2-audited",
+  "reference_status": "agent_draft_human_review_required",
+  "sources": [
+    "tcp.md",
+    "interface.md",
+    "cache-read.md",
+    "cache-write.md",
+    "concurrency.md",
+    "cpp.md",
+    "storage.md",
+    "formats.md"
+  ],
+  "queries": [
+    {
+      "id": "ack-meaning",
+      "family": "ack",
+      "split": "dev",
+      "category": "事实",
+      "text": "ACK=120 表示什么？是收到了120个字节吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "tcp.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "tcp.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 1,
+          "note": "初审补入相关说明，是否独立充分支持仍需审核。"
+        },
+        {
+          "file": "tcp.md",
+          "line_start": 17,
+          "line_end": 19,
+          "grade": 1,
+          "note": "初审补入相关说明，是否独立充分支持仍需审核。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "ack-length",
+      "family": "ack",
+      "split": "dev",
+      "category": "多证据",
+      "text": "SEQ=100，LEN 从20改成30，无SYN/FIN且数据连续收到，ACK是多少？说明计算依据。",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 9,
+              "line_end": 11
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "tcp.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "tcp.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "fin",
+      "family": "fin",
+      "split": "test",
+      "category": "条件",
+      "text": "无缺口且只收到 FIN、没有数据，下一期待序号推进多少？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 13,
+              "line_end": 15
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "tcp.md",
+          "line_start": 13,
+          "line_end": 15,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "gap",
+      "family": "gap",
+      "split": "test",
+      "category": "同义",
+      "text": "前面的字节没补齐，后面那段已经缓存，累计确认位置会直接跳到末尾吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 17,
+              "line_end": 19
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "tcp.md",
+          "line_start": 17,
+          "line_end": 19,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "rst",
+      "family": "rst",
+      "split": "test",
+      "category": "代码词",
+      "text": "协议字段 RST 是什么意思，界面 RESET 能证明出现 RST 包吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 21,
+              "line_end": 23
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "interface.md",
+              "line_start": 13,
+              "line_end": 15
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "tcp.md",
+          "line_start": 21,
+          "line_end": 23,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "interface.md",
+          "line_start": 13,
+          "line_end": 15,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "ui-ack",
+      "family": "ui-ack",
+      "split": "dev",
+      "category": "同名",
+      "text": "桌面程序的 ACK 按钮确认什么？与 TCP 的 ACK 有什么不同？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "interface.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "tcp.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "interface.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "tcp.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "ttl-read",
+      "family": "ttl-read",
+      "split": "dev",
+      "category": "数字",
+      "text": "读取服务条目在写入多久后过期？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "cache-read.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "cache-read.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "ttl-write",
+      "family": "ttl-write",
+      "split": "dev",
+      "category": "数字",
+      "text": "写入服务缓存 TTL 是多少秒？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "cache-write.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "cache-write.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "ttl-global",
+      "family": "ttl-global",
+      "split": "test",
+      "category": "多证据",
+      "text": "资料有10秒和30秒，能直接说整个系统 TTL 统一为30秒吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "cache-read.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "cache-write.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "cache-read.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "cache-write.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "disputed",
+        "reason": "争议：两处各自只能提供一部分跨服务证据。建议各为1级，完整证据要求两组；不要仅凭文件日期选30秒。"
+      }
+    },
+    {
+      "id": "semaphore",
+      "family": "semaphore",
+      "split": "test",
+      "category": "同义",
+      "text": "同时最多允许几个任务占用有限资源的许可计数机制叫什么？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "concurrency.md",
+              "line_start": 9,
+              "line_end": 11
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "concurrency.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "epoll",
+      "family": "epoll",
+      "split": "test",
+      "category": "代码词",
+      "text": "epoll ET 的非阻塞 read 循环为什么要读到 EAGAIN？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "concurrency.md",
+              "line_start": 17,
+              "line_end": 19
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "concurrency.md",
+          "line_start": 17,
+          "line_end": 19,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "view",
+      "family": "view",
+      "split": "test",
+      "category": "中英",
+      "text": "Why can a std::string_view become dangling after its owner is destroyed?",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "cpp.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "cpp.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "cpp.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 1,
+          "note": "初审补入相关说明，是否独立充分支持仍需审核。"
+        },
+        {
+          "file": "cpp.md",
+          "line_start": 29,
+          "line_end": 31,
+          "grade": 1,
+          "note": "初审补入相关说明，是否独立充分支持仍需审核。"
+        }
+      ],
+      "audit": {
+        "status": "disputed",
+        "reason": "争议：所有权章节和异步捕获也有生命周期说明。建议将这些列为部分支持，用户应核对是否足以独立回答。"
+      }
+    },
+    {
+      "id": "index",
+      "family": "index",
+      "split": "test",
+      "category": "条件",
+      "text": "索引(user_id,created_at)只有created_at条件，能保证和user_id前缀相同的定位吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "storage.md",
+              "line_start": 13,
+              "line_end": 15
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "storage.md",
+          "line_start": 13,
+          "line_end": 15,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "disputed",
+        "reason": "争议：题目不能把前缀规则解释成优化器绝不使用索引；建议保留原文的执行计划条件。"
+      }
+    },
+    {
+      "id": "atomic",
+      "family": "atomic",
+      "split": "test",
+      "category": "多证据",
+      "text": "事务原子性是否就保证并发隔离？两个概念分别说明什么？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "storage.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "storage.md",
+              "line_start": 9,
+              "line_end": 11
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "storage.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "storage.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "304",
+      "family": "304",
+      "split": "test",
+      "category": "数字",
+      "text": "304是重定向吗，和303有什么区别？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "formats.md",
+              "line_start": 5,
+              "line_end": 7
+            }
+          ]
+        },
+        {
+          "id": "g2",
+          "label": "必要证据 2",
+          "evidence": [
+            {
+              "file": "formats.md",
+              "line_start": 9,
+              "line_end": 11
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "formats.md",
+          "line_start": 5,
+          "line_end": 7,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "formats.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 1,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "utf8",
+      "family": "utf8",
+      "split": "test",
+      "category": "精确词",
+      "text": "A中 有几个字符、多少UTF-8字节？这能当token数吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "formats.md",
+              "line_start": 13,
+              "line_end": 15
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "formats.md",
+          "line_start": 13,
+          "line_end": 15,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        }
+      ],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "cosine",
+      "family": "cosine",
+      "split": "test",
+      "category": "事实",
+      "text": "检索余弦相似度0.92，能说答案有92%的正确率吗？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": true,
+      "evidence_groups": [
+        {
+          "id": "g1",
+          "label": "必要证据 1",
+          "evidence": [
+            {
+              "file": "formats.md",
+              "line_start": 21,
+              "line_end": 23
+            }
+          ]
+        }
+      ],
+      "annotations": [
+        {
+          "file": "formats.md",
+          "line_start": 21,
+          "line_end": 23,
+          "grade": 2,
+          "note": "初标：支持本题条件，待用户核对相关性。"
+        },
+        {
+          "file": "cache-read.md",
+          "line_start": 9,
+          "line_end": 11,
+          "grade": 1,
+          "note": "初审补入相关说明，是否独立充分支持仍需审核。"
+        }
+      ],
+      "audit": {
+        "status": "error",
+        "reason": "发现错误：缓存命中与余弦相似度是不同概念。原草案把 cache-read.md L9–L11 标为部分支持，实际不支持该命题，建议从 1 改为 0。草案保留，最终由用户审核决定。",
+        "suggested_annotations": [
+          {
+            "file": "formats.md",
+            "line_start": 21,
+            "line_end": 23,
+            "grade": 2,
+            "note": "初标：支持本题条件，待用户核对相关性。"
+          },
+          {
+            "file": "cache-read.md",
+            "line_start": 9,
+            "line_end": 11,
+            "grade": 0,
+            "note": "初审修正建议：缓存命中不能作为余弦相似度与答案正确概率关系的证据，建议等级 0。"
+          }
+        ],
+        "suggested_changes": "cache-read.md L9–L11：等级 1 → 0；保留 formats.md 的余弦解释。"
+      }
+    },
+    {
+      "id": "private-loss",
+      "family": "private-loss",
+      "split": "test",
+      "category": "无答案",
+      "text": "昨天我的网卡丢包的确切原因是什么？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": false,
+      "evidence_groups": [],
+      "annotations": [],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    },
+    {
+      "id": "missing-negative-ttl",
+      "family": "missing-negative-ttl",
+      "split": "test",
+      "category": "无答案",
+      "text": "读取服务负缓存的TTL是多少秒？",
+      "scope": [
+        "tcp.md",
+        "interface.md",
+        "cache-read.md",
+        "cache-write.md",
+        "concurrency.md",
+        "cpp.md",
+        "storage.md",
+        "formats.md"
+      ],
+      "answerable": false,
+      "evidence_groups": [],
+      "annotations": [],
+      "audit": {
+        "status": "disputed",
+        "reason": "争议：负缓存章节明确参数未提供，它能支持“资料不足”，不能充当确切秒数的答案证据。无答案查询应单列。"
+      }
+    },
+    {
+      "id": "scope-tcp",
+      "family": "scope-tcp",
+      "split": "test",
+      "category": "权限",
+      "text": "只查tcp.md：桌面程序ACK按钮点击后是否更新已读？",
+      "scope": [
+        "tcp.md"
+      ],
+      "answerable": false,
+      "evidence_groups": [],
+      "annotations": [],
+      "audit": {
+        "status": "checked",
+        "reason": "初审暂未发现确定错误；原文、范围及其余片段的相关性仍待用户确认。"
+      }
+    }
+  ]
+}

@@ -4,27 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledge Review · 阅读问答</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <link rel="stylesheet" href="/static/practice.css">
-  <script src="/static/app.js" defer></script>
-  <script src="/static/learning.js" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/practice.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/conversation.css?v={{ asset_version }}">
+  <link rel="stylesheet" href="/static/library.css?v={{ asset_version }}">
+  <script src="/static/app.js?v={{ asset_version }}" defer></script>
+  <script src="/static/library.js?v={{ asset_version }}" defer></script>
+  <script src="/static/learning.js?v={{ asset_version }}" defer></script>
+  <script src="/static/outline-review.js?v={{ asset_version }}" defer></script>
+  <script src="/static/outline-route.js?v={{ asset_version }}" defer></script>
+  <script src="/static/outlines.js?v={{ asset_version }}" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">K</span><span>Knowledge Review</span></div>
-    <div class="topbar-caption">本地阅读问答工作台 <span class="topbar-dot"></span> 资料优先，引用可查</div>
+    <div class="topbar-caption">本地阅读问答工作台 <span class="topbar-dot"></span> 资料优先，引用可查 · <a href="/retrieval-review">检索标注审核</a></div>
   </header>
 
   <main class="workspace">
     <aside class="sidebar" aria-label="资料列表">
+      <div class="chat-controls">
+        <h2>我的聊天</h2>
+        <select id="conversation-list" aria-label="选择聊天"></select>
+        <input id="conversation-filter" type="search" placeholder="筛选聊天标题" aria-label="筛选聊天标题">
+        <label><input id="show-archived" type="checkbox"> 查看归档聊天</label>
+        <p class="sidebar-hint">首次回复后自动命名，也可手动修改。</p>
+        <div class="chat-actions"><button id="new-conversation" type="button">新建聊天</button><button id="rename-conversation" type="button">重命名</button></div>
+        <form id="rename-form" hidden><input id="conversation-title" maxlength="120" aria-label="聊天标题"><button type="submit">保存标题</button></form>
+        <div class="chat-actions"><button id="archive-conversation" type="button">归档</button><button id="delete-conversation" type="button">删除聊天</button></div>
+        <p class="sidebar-hint">归档仍参与记忆；删除撤销原话和派生记忆。历史讨论按需要查找，不扩大资料范围。</p>
+      </div>
       <div class="panel-heading">
-        <div><span class="eyebrow">LIBRARY</span><h2>我的资料</h2></div>
+        <div><span class="eyebrow">LIBRARY</span><h2>知识库</h2></div>
         <label class="import-button" title="导入 Markdown 笔记">＋<input id="import-files" type="file" accept=".md,text/markdown" multiple hidden></label>
       </div>
+      <div id="collection-tree" class="collection-tree" aria-label="知识库和子集合"></div>
+      <details class="collection-editor"><summary>新建知识库或子集合</summary>
+        <form id="collection-create-form">
+          <input id="collection-name" maxlength="100" placeholder="集合名称" aria-label="新集合名称" required>
+          <label>放在 <select id="collection-parent" aria-label="父集合"></select></label>
+          <button type="submit">创建集合</button>
+        </form>
+      </details>
+      <details id="collection-rename-controls" class="collection-editor" hidden><summary>修改集合名称</summary>
+        <form id="collection-rename-form"><input id="collection-rename" maxlength="100" aria-label="集合新名称" required><button type="submit">保存</button></form>
+        <label>移动到 <select id="collection-destination" aria-label="集合目标位置"></select></label>
+        <button id="move-collection" type="button">移动集合</button>
+        <button id="remove-collection" type="button">删除集合，内容移到上一级</button>
+      </details>
+      <p id="library-status" class="request-status" role="status"></p>
+      <p id="collection-description" class="sidebar-hint"></p>
       <p class="sidebar-hint">默认以当前整篇文档为资料范围。勾选其他资料可一起使用，点击名称打开阅读。</p>
       <div id="document-list" class="document-list" aria-live="polite"></div>
       <p id="import-status" class="import-status" role="status"></p>
-      <div class="sidebar-footer">导入的文件保存在本机项目目录中。每次问答仅使用已勾选的资料。</div>
+      <details class="collection-editor"><summary>移动当前文件到集合</summary>
+        <select id="document-destination" aria-label="文件目标集合"></select><button id="move-document" type="button">移动文件</button>
+        <label>替换当前文件正文 <input id="replace-document" type="file" accept=".md"></label>
+        <button id="remove-document" type="button">移出资料库，保留旧题依据</button>
+        <p class="sidebar-hint">替换保留文件身份及名称。移出后不能再查阅；本机原始导入文件和旧练习快照保留。</p>
+      </details>
+      <div class="sidebar-footer">资料与正文版本保存在本机项目中。问答默认允许查阅当前整篇文档，勾选其他资料可扩大范围；模型按需要查阅。集合练习和学习清单使用所选集合及子集合的资料。</div>
     </aside>
 
     <section class="reader-panel" aria-label="笔记阅读器">
@@ -56,7 +95,16 @@
         <button id="mode-learning" type="button">学习计划</button>
       </div>
       <section id="ask-view">
-      <div class="panel-heading answer-heading"><div><span class="eyebrow">ASK THE NOTES</span><h2>围绕文档提问</h2></div></div>
+      <label class="response-language-control" for="retrieval-mode">
+        <span>资料查找</span>
+        <select id="retrieval-mode">
+          <option value="hybrid">融合查找（推荐）</option>
+          <option value="dense">原语义查找</option>
+        </select>
+      </label>
+      <div class="panel-heading answer-heading"><div><span class="eyebrow">CONVERSATION</span><h2 id="chat-title">连续问答</h2></div></div>
+      <button id="discussion-practice" type="button">根据这段讨论考考我</button>
+      <details id="chat-summary" hidden><summary>当前聊天摘要</summary><div id="summary-content"></div></details>
       <div id="selection-card" class="selection-card empty">
         <span class="selection-label">提问范围 · 选段可选</span>
         <strong id="selection-range">打开一份文档即可提问</strong>
@@ -71,7 +119,7 @@
         <label for="question">你的问题</label>
         <textarea id="question" rows="4" maxlength="4000" placeholder="例如：这篇文档讲了哪些关键机制？它们有什么联系？"></textarea>
         <label class="strict-toggle"><input id="strict-mode" type="checkbox"><span>仅依据所选资料回答</span></label>
-        <button id="ask-button" class="primary-button" type="submit">开始提问 <span>↗</span></button>
+        <button id="ask-button" class="primary-button" type="submit">发送 <span>↗</span></button>
       </form>
       <p id="request-status" class="request-status" role="status"></p>
       <div id="answer-result" class="answer-result" aria-live="polite"></div>
@@ -79,18 +127,39 @@
       <section id="learning-view" hidden>
         <div class="panel-heading answer-heading"><div><span class="eyebrow">LEARNING PLAN</span><h2>我的学习计划</h2></div></div>
         <p class="sidebar-hint">选择加入的练习会保存在这里。同一知识点下的不同目标分别安排复习；你可以随时练习或暂停。</p>
+        <label>计划范围 <select id="learning-collection" aria-label="学习计划集合"></select></label>
+        <button id="collection-practice" class="practice-action" type="button">从这个集合的资料开始练习</button>
         <p id="learning-status" class="request-status" role="status"></p>
+        <section class="outline-panel" aria-label="集合学习清单">
+          <h3>知识点与学习目标清单</h3>
+            <p class="practice-hint">按计划范围中的集合及子集合整理资料，自动选择全文或分层阅读。审核、修改目标并勾选后才加入计划；章节进度表示资料已分析，不表示已经掌握。</p>
+          <form id="outline-form" class="practice-start-form">
+            <label for="outline-objective">学习方向（可选）</label>
+            <input id="outline-objective" maxlength="300" placeholder="例如：理解 TCP 的可靠传输">
+            <button id="outline-create" class="primary-button" type="submit">生成可审核清单</button>
+          </form>
+          <label>已保存清单 <select id="outline-list" aria-label="已保存的学习清单"></select></label>
+          <p id="outline-status" class="request-status" role="status"></p>
+          <div id="outline-detail"></div>
+        </section>
+        <h3>已加入的学习计划</h3>
         <div id="learning-list" aria-live="polite"></div>
       </section>
       <section id="practice-view" hidden>
         <div class="panel-heading answer-heading"><div><span class="eyebrow">PRACTICE</span><h2>从原文开始练习</h2></div></div>
-        <p id="practice-selection" class="practice-selection">先在阅读区选中一段原文。</p>
+        <p id="practice-selection" class="practice-selection">默认使用当前整篇文档，选段可选。</p>
         <form id="practice-start-form" class="practice-start-form">
+          <label for="practice-scope">练习资料范围</label>
+          <select id="practice-scope"><option value="document">当前文档（选段可选）</option><option value="collection">当前知识库集合（含子集合）</option><option value="discussion">当前聊天与相关历史（先审核再加入）</option></select>
+          <select id="practice-collection" aria-label="练习集合" hidden></select>
+          <label id="discussion-source-controls" hidden><input id="discussion-strict" type="checkbox">仅按当前文档出题（讨论只提供角度）</label>
+          <button id="practice-clear-focus" class="clear-focus" type="button">取消选段，使用整篇文档</button>
           <label for="practice-objective">本次学习目标（可选）</label>
           <input id="practice-objective" maxlength="300" placeholder="例如：理解 epoll 的 ET 模式">
           <button id="practice-start-button" class="primary-button" type="submit">生成一道题 <span>↗</span></button>
         </form>
         <p id="practice-status" class="request-status" role="status"></p>
+        <div id="chat-practice-jobs" aria-live="polite"></div>
         <div class="practice-history-heading"><h3>练习记录</h3><span>关闭页面后可继续</span></div>
         <div id="practice-list" class="practice-list"></div>
         <div id="practice-detail" class="practice-detail" aria-live="polite"></div>

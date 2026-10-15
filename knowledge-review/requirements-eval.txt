@@ -1,0 +1,4 @@
+# Optional local retrieval evaluation; keeps the app's base dependencies separate.
+-r requirements-local.txt
+beir==2.2.0
+pytrec-eval-terrier==0.5.10

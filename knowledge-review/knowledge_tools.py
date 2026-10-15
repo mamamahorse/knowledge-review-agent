@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from time import perf_counter
 
 from chunking import Chunk, chunk_source, section_label
 from embedding_config import EmbeddingConfig
@@ -10,6 +11,7 @@ from embeddings import LocalEmbedder
 from retrieval import SearchHit, rank_chunks
 from sources import Source
 from vector_index import get_document_vectors
+from hybrid_retrieval import BM25Index, HybridConfig, reciprocal_rank_fusion
 
 MAX_SEARCH_RESULTS = 10
 MAX_READ_LINES = 200
@@ -24,6 +26,8 @@ class SearchResult:
     dimensions: int
     model_name: str
     max_tokens: int
+    retrieval_mode: str = 'dense'
+    branches: dict | None = None
 
     def as_dict(self, sources: list[Source]) -> dict:
         paths = {source.source_id: source.path.name for source in sources}
@@ -37,8 +41,11 @@ class SearchResult:
                 "line_start": hit.chunk.line_start,
                 "line_end": hit.chunk.line_end,
                 "text": hit.chunk.text,
+                **({'branches':self.branches.get(hit.chunk.chunk_id,{})} if self.branches is not None else {}),
             } for hit in self.hits],
-            "notice": "Similarity ranks candidates; it is not an answer confidence score.",
+            "retrieval_mode": self.retrieval_mode,
+            "score_kind": 'rrf' if self.retrieval_mode == 'hybrid' else 'cosine',
+            "notice": "Scores rank candidates; this is not an answer confidence score or proof of relevance.",
         }
 
 
@@ -71,11 +78,14 @@ class KnowledgeTools:
         max_chars: int = 1200, min_chars: int = 100,
         no_cache: bool = False, rebuild_index: bool = False,
         embedder: LocalEmbedder | None = None, index_path: Path | None = None,
+        retrieval_mode: str = 'dense',
     ):
         if not sources:
             raise ValueError("Knowledge tools require at least one source.")
         if max_chars <= 0 or not 0 <= min_chars <= max_chars:
             raise ValueError("Chunk limits must satisfy 0 <= min_chars <= max_chars.")
+        if retrieval_mode not in ('dense', 'hybrid'):
+            raise ValueError('查找方式必须为dense或hybrid；重排暂仅用于离线评测。')
         self.sources = list(sources)
         self.embedding_config = embedding_config
         self.max_chars = max_chars
@@ -89,6 +99,9 @@ class KnowledgeTools:
         ]
         self._embedder = embedder
         self._vectors = None
+        self.retrieval_mode = retrieval_mode
+        self._bm25 = None
+        self.retrieval_trace = []
 
     @property
     def embedder(self) -> LocalEmbedder:
@@ -97,12 +110,31 @@ class KnowledgeTools:
         return self._embedder
 
     def search_notes(self, query: str, top_k: int = 3) -> SearchResult:
-        # Using vector similarity to find top_k chunks.
         if not isinstance(query, str) or not query.strip():
             raise ValueError("search_notes query must not be blank.")
         if type(top_k) is not int or not 1 <= top_k <= MAX_SEARCH_RESULTS:
             raise ValueError(f"search_notes top_k must be between 1 and {MAX_SEARCH_RESULTS}.")
+        trace = {'mode':self.retrieval_mode,'status':'failed','requested_top_k':top_k,
+                 'source_ids':[s.source_id for s in self.sources]}
+        start = perf_counter()
+        try:
+            result = self._search_notes(query, top_k, trace)
+            trace.update(status='ok', returned=[{'chunk_id':h.chunk.chunk_id,'source_id':h.chunk.source_id,
+                'line_start':h.chunk.line_start,'line_end':h.chunk.line_end,'score':h.score,
+                **({'branches':result.branches[h.chunk.chunk_id]} if result.branches is not None else {})} for h in result.hits])
+            return result
+        except Exception as exc:
+            # Keep the failure visible without storing query text or transport data.
+            trace['error_type'] = type(exc).__name__
+            raise
+        finally:
+            trace['total_ms'] = (perf_counter()-start)*1000
+            self.retrieval_trace.append(trace)
+
+    def _search_notes(self, query, top_k, trace):
+        start = perf_counter()
         query_vector = self.embedder.embed_query(query)
+        trace['query_embedding_ms'] = (perf_counter()-start)*1000
         # Custom embedders may provide their own preparation; constructor mocks
         # and older adapters remain usable without depending on a concrete type.
         if self._vectors is None and callable(getattr(type(self.embedder), "prepare_chunks", None)):
@@ -124,10 +156,35 @@ class KnowledgeTools:
             vectors = indexed.vectors
             reused, computed = indexed.reused, indexed.computed
             self._vectors = vectors
-        hits = rank_chunks(self.chunks, vectors, query_vector, top_k)
+        trace.update(permitted_chunks=len(self.chunks),computed_vectors=computed,reused_vectors=reused,
+                     vectors_in_memory=memory_hit)
+        start = perf_counter()
+        config = HybridConfig()
+        hits = rank_chunks(self.chunks, vectors, query_vector,
+                           config.branch_m if self.retrieval_mode == 'hybrid' else top_k)
+        trace['dense_ms'] = (perf_counter()-start)*1000
+        branches = None
+        if self.retrieval_mode == 'hybrid':
+            # Build only on real search, from the same prepared permission scope.
+            # Instance-local reuse cannot leak removed versions to other requests.
+            start = perf_counter()
+            built = self._bm25 is None
+            if built:
+                self._bm25 = BM25Index(self.chunks, config)
+            trace['bm25_build_ms'] = (perf_counter()-start)*1000
+            start = perf_counter()
+            lexical_hits = self._bm25.search(query, config.branch_m)
+            trace['bm25_search_ms'] = (perf_counter()-start)*1000
+            start = perf_counter()
+            fused, branches = reciprocal_rank_fusion(self.chunks, hits, lexical_hits, config)
+            trace.update(rrf_ms=(perf_counter()-start)*1000, bm25_built=built,
+                         dense_candidates=len(hits), bm25_candidates=len(lexical_hits),
+                         fused_candidates=len(fused), protocol=config.protocol())
+            hits = fused[:top_k]
         return SearchResult(
             hits, reused, computed, memory_hit, len(query_vector),
             self.embedding_config.model_name, self.embedder.max_tokens,
+            self.retrieval_mode, branches,
         )
 
     def read_source(self, source_id: str, line_start: int, line_end: int) -> ReadResult:
@@ -185,7 +242,7 @@ def knowledge_tool_definitions() -> list[dict]:
     return [
         {
             "name": "search_notes",
-            "description": "Semantically search the currently loaded notes. Scores rank candidates and do not prove relevance.",
+            "description": "Search the currently loaded notes for relevant meaning and terms. Scores rank candidates and do not prove relevance.",
             "parameters": {
                 "type": "object", "additionalProperties": False,
                 "properties": {

@@ -1,0 +1,16 @@
+.chat-controls { padding: 14px 18px; border-bottom: 1px solid #dce3e5; }
+.chat-controls h2 { font-size: 16px; margin: 0 0 10px; }
+.chat-controls select, .chat-controls input { width: 100%; padding: 8px; border: 1px solid #dce3e5; border-radius: 6px; background: white; }
+.chat-actions { display: flex; gap: 8px; margin-top: 8px; }
+.chat-controls button, .chat-retry, .summary-evidence { padding: 6px 10px; border: 1px solid #dce3e5; border-radius: 6px; background: white; cursor: pointer; margin: 4px 4px 4px 0; }
+.chat-turn { border-top: 1px solid #dce3e5; padding: 14px 0; }
+.chat-message > strong { font-size: 13px; color: #50616b; }
+.chat-original { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; background: #f0f4f3; border-radius: 8px; }
+#chat-summary { margin: 12px 0; padding: 10px; background: #f0f4f3; border-radius: 8px; font-size: 13px; }
+#summary-content { overflow-wrap: anywhere; }
+.chat-message:target { outline: 2px solid #8baf9e; }
+.history-dialog { max-width: min(680px, 90vw); max-height: 80vh; overflow: auto; border: 1px solid #ddd; border-radius: 12px; padding: 24px; }
+.history-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.history-dialog button { margin-right: 8px; }
+.history-reference { border-left: 3px solid #9a7c50; }
+#conversation-filter { width: 100%; box-sizing: border-box; margin: 8px 0; }

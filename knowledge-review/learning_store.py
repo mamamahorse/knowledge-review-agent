@@ -6,16 +6,19 @@ from contextlib import closing
 from uuid import uuid4
 
 from learning_types import LearningDraft
-from practice_model import GradeDraft
+from practice_model import GradeDraft, parse_grade
+from practice_provenance import check_session
 from practice_store import PracticeStore
 from learning_state import record_evaluation, reschedule
 from review_scheduler import initial_schedule, now, SCHEDULER_VERSION
+from library_store import LibraryStore
 
 
 class LearningStore(PracticeStore):
-    def enroll(self, session_id, attempt_id, learning: LearningDraft, *, unit_id=None, criterion_indices=None):
-        with closing(self._connect()) as conn, conn:
-            conn.execute("BEGIN IMMEDIATE")
+    def enroll(self, session_id, attempt_id, learning: LearningDraft, *, unit_id=None, criterion_indices=None, collection_id="root", _connection=None):
+        LibraryStore(self).get(collection_id)
+        with self.transaction(_connection) as conn:
+            check_session(conn, session_id)
             attempt = conn.execute("SELECT * FROM practice_questions WHERE id=? AND session_id=?",
                                    (attempt_id, session_id)).fetchone()
             if attempt is None:
@@ -42,9 +45,11 @@ class LearningStore(PracticeStore):
                 (target_id, unit_id, learning.target.model_dump_json(), attempt["question_ref"], session_id,
                  learning.knowledge.model_dump_json(), json.dumps(criterion_indices)))
             initial, parameters = initial_schedule(timestamp)
-            conn.execute("INSERT INTO review_items VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?)",
+            conn.execute("""INSERT INTO review_items (id,target_id,status,enrolled_at,initial_card_json,
+                card_json,parameters_json,scheduler_version,next_review_at,collection_id)
+                VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)""",
                          (item_id, target_id, timestamp, json.dumps(initial), json.dumps(initial),
-                          json.dumps(parameters), SCHEDULER_VERSION, initial["due"]))
+                          json.dumps(parameters), SCHEDULER_VERSION, initial["due"], collection_id))
             conn.execute("UPDATE practice_questions SET target_id=? WHERE id=?", (target_id, attempt_id))
             if attempt["answer_text"] is None and attempt["position"] == 1:
                 conn.execute("""UPDATE practice_sessions SET review_item_id=?, review_mode='original'
@@ -68,18 +73,22 @@ class LearningStore(PracticeStore):
             history = [dict(item) for item in conn.execute("""SELECT q.answer_text, q.assistance, q.grade_json, q.submitted_at,
                 q.draft_json, e.origin FROM practice_questions q
                 LEFT JOIN evaluation_revisions e ON e.id=q.effective_evaluation_id
-                WHERE q.target_id=? AND q.grade_json IS NOT NULL ORDER BY q.submitted_at DESC LIMIT 8""", (row["target_id"],))]
+                WHERE q.target_id=? AND q.grade_json IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM practice_basis b WHERE b.session_id=q.session_id AND b.revoked=1)
+                ORDER BY q.submitted_at DESC LIMIT 8""", (row["target_id"],))]
             related = [dict(entry) for entry in conn.execute("""SELECT q.answer_text, q.assistance, q.grade_json,
                 q.submitted_at, q.draft_json, t.draft_json AS target_json FROM practice_questions q
                 JOIN learning_targets t ON t.id=q.target_id
                 WHERE t.unit_id=? AND t.id!=? AND q.grade_json IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM practice_basis b WHERE b.session_id=q.session_id AND b.revoked=1)
                 ORDER BY q.submitted_at DESC LIMIT 8""", (row["unit_id"], row["target_id"]))]
         return {**dict(row), "knowledge": json.loads(row["knowledge_json"]), "target": json.loads(row["target_json"]),
                 "original": json.loads(original["draft_json"]), "pending_session_id": pending["id"] if pending else None,
                 "history": history, "related_history": related,
                 "original_criterion_indices": json.loads(row["criterion_indices_json"])}
 
-    def list_plan(self):
+    def list_plan(self, collection_id="root"):
+        allowed = set(LibraryStore(self).descendants(collection_id))
         with closing(self._connect()) as conn:
             units = [dict(row) for row in conn.execute("SELECT * FROM knowledge_units ORDER BY created_at DESC")]
             item_ids = [row["id"] for row in conn.execute("SELECT id FROM review_items ORDER BY next_review_at")]
@@ -88,20 +97,24 @@ class LearningStore(PracticeStore):
         moment = now()
         for item_id in item_ids:
             item = self.item(item_id)
+            if item["collection_id"] not in allowed:
+                continue
+            source_basis = self.get(item['source_session_id']).get('basis')
             evidence = []
             for entry in item["history"]:
-                grade = GradeDraft.model_validate_json(entry["grade_json"])
+                grade = parse_grade(entry["grade_json"])
                 evidence.append({"submitted_at": entry["submitted_at"], "assistance": entry["assistance"],
                     "assessment": grade.overall_assessment or "legacy", "feedback": grade.feedback,
                     "origin": entry["origin"], "dimension_observations": [x.model_dump() for x in grade.dimension_observations]})
             groups[item["unit_id"]]["items"].append({
-                "id": item_id, "target_id": item["target_id"], **item["target"],
+                "id": item_id, "target_id": item["target_id"], "collection_id": item["collection_id"], **item["target"],
                 "status": item["status"], "next_review_at": item["next_review_at"],
                 "due": datetime.fromisoformat(item["next_review_at"]) <= datetime.fromisoformat(moment) and item["status"] == "active",
                 "pending_session_id": item["pending_session_id"], "evidence": evidence,
                 "recent_evidence_count": len(evidence),
+                "source_revoked": bool(source_basis and source_basis['revoked']),
             })
-        return list(groups.values())
+        return [group for group in groups.values() if group["items"]]
 
     def set_status(self, item_id, status):
         with closing(self._connect()) as conn, conn:
@@ -126,6 +139,7 @@ class LearningStore(PracticeStore):
     def revise_grade(self, session_id, attempt_id, grade, reason, expected_revision):
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            check_session(conn, session_id)
             question = conn.execute("SELECT * FROM practice_questions WHERE id=? AND session_id=?",
                                     (attempt_id, session_id)).fetchone()
             if question is None:

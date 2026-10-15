@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from practice_model import GradeDraft, QuestionDraft
+from practice_model import GradeDraft, QuestionDraft, parse_question, parse_grade
+from practice_provenance import initialize as initialize_provenance, check_session, basis_record, check_dependencies
 from sources import Source
 from response_preferences import ResponseLanguage, validate_language
 from learning_state import initialize, record_evaluation
+from library_store import initialize_library
 
 DEFAULT_PRACTICE_DB = Path(__file__).resolve().parent / ".data" / "practice.sqlite3"
 MAX_QUESTIONS_PER_SESSION = 3
@@ -25,6 +27,8 @@ def _now() -> str:
 class PracticeStore:
     def __init__(self, path: Path = DEFAULT_PRACTICE_DB):
         self.path = path
+        sibling = path.parent / 'conversations.sqlite3'
+        self.conversation_path = sibling if sibling.is_file() else None
         path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as conn, conn:
             conn.executescript("""
@@ -62,6 +66,8 @@ class PracticeStore:
                     NOT NULL DEFAULT 'zh' CHECK (response_language IN ('zh', 'en'))
                 """)
             initialize(conn)
+            initialize_library(conn)
+            initialize_provenance(conn)
             conn.execute("DROP INDEX IF EXISTS uq_active_review")
             conn.execute("""CREATE UNIQUE INDEX uq_active_review
                 ON practice_sessions(review_item_id)
@@ -72,7 +78,23 @@ class PracticeStore:
         conn = sqlite3.connect(self.path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        if getattr(self, 'conversation_path', None):
+            conn.execute('ATTACH DATABASE ? AS memory', (str(self.conversation_path),))
         return conn
+
+    def assert_basis(self, session_id):
+        with closing(self._connect()) as db:
+            check_session(db, session_id)
+
+    @contextmanager
+    def transaction(self, connection=None):
+        """Compose seed question, enrollment and approval in one existing transaction."""
+        if connection is not None:
+            yield connection
+            return
+        with closing(self._connect()) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
 
     def create(
         self, objective: str, focus_source_id: str, focus_start: int, focus_end: int,
@@ -80,11 +102,20 @@ class PracticeStore:
         *, response_language: ResponseLanguage = "zh",
         review_item_id: str | None = None, review_mode: str | None = None,
         target_id: str | None = None, question_ref: str | None = None,
+        collection_id: str = "root",
+        basis=None,
+        document_dependencies=(),
+        _connection=None,
     ) -> str:
         validate_language(response_language)
         session_id, question_id, timestamp = uuid4().hex, uuid4().hex, _now()
-        with closing(self._connect()) as conn, conn:
-            conn.execute("BEGIN IMMEDIATE")
+        with self.transaction(_connection) as conn:
+            for document in document_dependencies:
+                row = conn.execute('SELECT revision,removed FROM document_states WHERE document_id=?', (document['id'],)).fetchone()
+                if row is None or row['removed'] or row['revision'] != document['revision']:
+                    raise ValueError('出题资料已替换或移除，请刷新后重新生成。')
+            if basis:
+                check_dependencies(conn, basis['dependencies'])
             if review_item_id:
                 item = conn.execute("SELECT status FROM review_items WHERE id=?", (review_item_id,)).fetchone()
                 if item is None or item["status"] != "active":
@@ -97,11 +128,11 @@ class PracticeStore:
             conn.execute("""
                 INSERT INTO practice_sessions (
                     id, created_at, updated_at, status, objective, focus_source_id,
-                    focus_start, focus_end, sources_json, visible_json, response_language
-                ) VALUES (?, ?, ?, 'waiting_for_answer', ?, ?, ?, ?, ?, ?, ?)
+                    focus_start, focus_end, sources_json, visible_json, response_language, collection_id
+                ) VALUES (?, ?, ?, 'waiting_for_answer', ?, ?, ?, ?, ?, ?, ?, ?)
             """, (session_id, timestamp, timestamp, objective, focus_source_id,
                   focus_start, focus_end, json.dumps(snapshots, ensure_ascii=False),
-                  json.dumps(visible_ranges, ensure_ascii=False), response_language))
+                  json.dumps(visible_ranges, ensure_ascii=False), response_language, collection_id))
             conn.execute("""
                 INSERT INTO practice_questions (id, session_id, position, draft_json)
                 VALUES (?, ?, 1, ?)
@@ -114,6 +145,9 @@ class PracticeStore:
                          (question_ref, target_id, question_id))
             conn.execute("UPDATE practice_sessions SET review_item_id=?, review_mode=? WHERE id=?",
                          (review_item_id, review_mode, session_id))
+            if basis:
+                conn.execute('INSERT INTO practice_basis VALUES (?,?,?,?,0)',
+                             (session_id, json.dumps(basis['dependencies']), json.dumps(basis['references']), basis['kind']))
         return session_id
 
     def get(self, session_id: str) -> dict:
@@ -125,6 +159,7 @@ class PracticeStore:
                 "SELECT * FROM practice_questions WHERE session_id = ? ORDER BY position", (session_id,),
             ).fetchall()
             details = {}
+            basis = basis_record(conn, session_id)
             for question in questions:
                 target = conn.execute("""SELECT t.draft_json, u.name, t.unit_id FROM learning_targets t
                     JOIN knowledge_units u ON u.id=t.unit_id WHERE t.id=?""", (question["target_id"],)).fetchone()
@@ -140,13 +175,14 @@ class PracticeStore:
                 }
         return {
             **dict(row),
+            "basis": basis,
             "snapshots": json.loads(row["sources_json"]),
             "visible_ranges": json.loads(row["visible_json"]),
             "questions": [{
                 **dict(question),
                 **details[question["id"]],
-                "draft": QuestionDraft.model_validate_json(question["draft_json"]),
-                "grade": GradeDraft.model_validate_json(question["grade_json"])
+                "draft": parse_question(question["draft_json"]),
+                "grade": parse_grade(question["grade_json"])
                 if question["grade_json"] else None,
             } for question in questions],
         }
@@ -165,7 +201,7 @@ class PracticeStore:
         return [{
             "id": row["id"], "objective": row["objective"], "status": row["status"],
             "updated_at": row["updated_at"], "position": row["position"],
-            "question": QuestionDraft.model_validate_json(row["draft_json"]).question,
+            "question": parse_question(row["draft_json"]).question,
         } for row in rows]
 
     def submit_answer(
@@ -179,6 +215,7 @@ class PracticeStore:
             raise ValueError("请先填写你的回答。")
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            check_session(conn, session_id)
             session = conn.execute(
                 "SELECT status FROM practice_sessions WHERE id = ?", (session_id,),
             ).fetchone()
@@ -204,6 +241,8 @@ class PracticeStore:
     def set_grading_language(self, session_id: str, response_language: ResponseLanguage) -> None:
         validate_language(response_language)
         with closing(self._connect()) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            check_session(conn, session_id)
             changed = conn.execute("""
                 UPDATE practice_sessions SET response_language = ?
                 WHERE id = ? AND status = 'grading'
@@ -220,6 +259,7 @@ class PracticeStore:
     ) -> None:
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            check_session(conn, session_id)
             session = conn.execute(
                 "SELECT status FROM practice_sessions WHERE id = ?", (session_id,),
             ).fetchone()
@@ -251,6 +291,7 @@ class PracticeStore:
     def continue_follow_up(self, session_id: str) -> None:
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            check_session(conn, session_id)
             session = conn.execute("SELECT * FROM practice_sessions WHERE id=?", (session_id,)).fetchone()
             if session is None:
                 raise KeyError("找不到这次练习。")
@@ -274,13 +315,14 @@ class PracticeStore:
     def reveal_reference(self, session_id: str, question_id: str) -> list[str]:
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            check_session(conn, session_id)
             row = conn.execute("SELECT * FROM practice_questions WHERE session_id=? AND id=?",
                                (session_id, question_id)).fetchone()
             if row is None:
                 raise KeyError("找不到这道题。")
             if row["answer_text"] is None:
                 conn.execute("UPDATE practice_questions SET assistance='reference_seen' WHERE id=?", (question_id,))
-            return QuestionDraft.model_validate_json(row["draft_json"]).rubric_points
+            return parse_question(row["draft_json"]).rubric_points
 
     def finish(self, session_id: str) -> None:
         with closing(self._connect()) as conn, conn:
@@ -348,6 +390,8 @@ def public_session(record: dict) -> dict:
             "unit_id": question["unit_id"], "unit_name": question["unit_name"],
             "target_title": question["target"]["title"] if question["target"] else None,
             "capability": question["target"]["capability"] if question["target"] else None,
+            "proposed_target": ({'knowledge_name': draft.learning.knowledge.name,
+                                 **draft.learning.target.model_dump(exclude={'criteria'})} if draft.learning else None),
             "candidate_available": bool(question["candidate_json"]),
             "assistance": question["assistance"],
             "suggested_rating": grade.suggested_rating if grade else None,
@@ -362,6 +406,9 @@ def public_session(record: dict) -> dict:
         "id": record["id"], "objective": record["objective"],
         "status": record["status"], "created_at": record["created_at"],
         "response_language": record["response_language"],
+        "collection_id": record["collection_id"],
         "updated_at": record["updated_at"], "questions": questions,
         "review_item_id": record["review_item_id"], "review_mode": record["review_mode"],
+        "basis": ({'kind': record['basis']['kind'], 'revoked': bool(record['basis']['revoked']),
+                   'references': record['basis']['references']} if record.get('basis') else None),
     }

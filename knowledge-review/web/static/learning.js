@@ -2,6 +2,7 @@ const capabilities = { recall: "回忆", explain: "解释", apply: "应用", dis
 const assessments = { meets_standard: "达到本题标准", developing: "理解尚有缺口", needs_review: "需要复习", uncertain: "暂无法判断" };
 const reviewRatings = { Again: "Again · 未能完成回忆", Hard: "Hard · 正确但吃力", Good: "Good · 正常完成", Easy: "Easy · 轻松完成" };
 let learningGroups = [];
+let learningEpoch = 0;
 
 function choice(options, value, label) {
   const select = makeElement("select", "learning-select");
@@ -44,7 +45,10 @@ async function showLearningSession(session) {
 }
 
 async function refreshLearning() {
-  learningGroups = await request("/api/learning");
+  const epoch = ++learningEpoch;
+  const groups = await request(`/api/learning?collection_id=${encodeURIComponent($("learning-collection").value || "root")}`);
+  if (epoch !== learningEpoch) return;
+  learningGroups = groups;
   const list = $("learning-list");
   list.replaceChildren();
   if (!learningGroups.length) list.append(makeElement("p", "practice-empty", "还没有学习计划。可以在任意一道练习中选择“加入学习计划”。"));
@@ -56,6 +60,7 @@ async function refreshLearning() {
     section.append(knowledge);
     group.items.forEach((item) => {
       const card = makeElement("article", "learning-item");
+      card.append(makeElement("p", "collection-label", collectionPath(item.collection_id)));
       card.append(makeElement("span", "practice-rating", `${capabilities[item.capability]} · ${item.status === "paused" ? "已暂停" : item.due ? "可以复习了" : "已安排"}`));
       card.append(makeElement("h4", "", item.title));
       card.append(makeElement("p", "practice-state", item.evidence.length ? `最近一次：${assessments[item.evidence[0].assessment] || "历史评分"}${item.evidence[0].assistance !== "none_recorded" ? " · 使用了提示/资料" : ""}` : "尚无作答证据"));
@@ -63,13 +68,13 @@ async function refreshLearning() {
       const actions = makeElement("div", "learning-actions");
       const review = makeElement("button", "practice-action", item.pending_session_id ? "继续未完成的作答" : "同目标变式");
       review.type = "button";
-      review.disabled = item.status === "paused";
+      review.disabled = item.status === "paused" || item.source_revoked;
       review.addEventListener("click", () => learningAction(review, async () => {
         await showLearningSession(await jsonRequest(`/api/learning/${item.id}/review`, { mode: "variant", response_language: responseLanguage() }));
       }, "learning-status"));
       const original = makeElement("button", "practice-action secondary", "重做原题");
       original.type = "button";
-      original.disabled = item.status === "paused" || Boolean(item.pending_session_id);
+      original.disabled = item.status === "paused" || Boolean(item.pending_session_id) || item.source_revoked;
       if (item.pending_session_id) original.title = "先完成或结束当前题，再选择原题。";
       original.addEventListener("click", () => learningAction(original, async () => {
         await showLearningSession(await jsonRequest(`/api/learning/${item.id}/review`, { mode: "original", response_language: responseLanguage() }));
@@ -79,6 +84,15 @@ async function refreshLearning() {
       pause.addEventListener("click", () => learningAction(pause, () => jsonRequest(`/api/learning/${item.id}`, { status: item.status === "paused" ? "active" : "paused" }, "PATCH"), "learning-status"));
       actions.append(review, original, pause);
       card.append(actions);
+      if (item.source_revoked) card.append(makeElement("p", "practice-state", "聊天来源已撤销，旧目标只保留记录；请根据当前资料创建新题。"));
+      const location = makeElement("details", "learning-details");
+      location.append(makeElement("summary", "", "调整计划归属"));
+      const destination = choice(collectionOptions(), item.collection_id, "复习项目标集合");
+      const move = makeElement("button", "practice-action secondary", "移动复习项");
+      move.type = "button";
+      move.addEventListener("click", () => learningAction(move, () => jsonRequest(`/api/learning/${item.id}/collection`, { collection_id: destination.value }, "PATCH"), "learning-status"));
+      location.append(destination, move);
+      card.append(location);
       const evidence = makeElement("details", "learning-details");
       evidence.append(makeElement("summary", "", `近期学习证据 · ${item.recent_evidence_count} 次`));
       evidence.append(makeElement("p", "practice-feedback", item.description));
@@ -97,6 +111,7 @@ async function refreshLearning() {
     const dimension = choice(capabilities, "apply", "新目标的能力维度");
     const generate = makeElement("button", "practice-action secondary", "生成并加入计划");
     generate.type = "button";
+    generate.disabled = group.items[0].source_revoked;
     generate.addEventListener("click", () => learningAction(generate, async () => {
       await showLearningSession(await jsonRequest(`/api/learning/${group.items[0].id}/dimensions`, { capability: dimension.value, response_language: responseLanguage() }));
     }, "learning-status"));
@@ -104,6 +119,9 @@ async function refreshLearning() {
     section.append(add);
     list.append(section);
   });
+  if (typeof outlineJob !== 'undefined' && outlineJob && !outlineJoining && outlineJob.routes?.runs.length) {
+    await loadOutline(outlineJob.id);
+  }
 }
 
 function appendEnrollmentControl(card, session, item) {
@@ -112,15 +130,17 @@ function appendEnrollmentControl(card, session, item) {
     return;
   }
   const group = choice({ "": "作为新的知识点", ...Object.fromEntries(learningGroups.map((g) => [g.id, g.name])) }, "", "加入计划的知识点归组");
+  const collection = choice(collectionOptions(), session.collection_id || "root", "加入学习计划的集合");
+  collection.dataset.collectionSelector = session.collection_id || "root";
   const button = makeElement("button", "practice-action secondary", "加入学习计划");
   button.type = "button";
   button.addEventListener("click", () => learningAction(button, async () => {
-    const result = await jsonRequest(`/api/practice/${session.id}/enroll`, { question_id: item.id, unit_id: group.value || null, response_language: responseLanguage() });
+    const result = await jsonRequest(`/api/practice/${session.id}/enroll`, { question_id: item.id, unit_id: group.value || null, collection_id: collection.value, response_language: responseLanguage() });
     state.practice = result.session;
     renderPractice(result.session);
   }));
   const row = makeElement("div", "learning-enroll");
-  row.append(group, button);
+  row.append(makeElement("label", "practice-label", "加入哪个知识库？"), collection, group, button);
   card.append(row);
 }
 
@@ -214,4 +234,3 @@ function appendGradeControls(card, session, item) {
 }
 
 $("mode-learning").addEventListener("click", () => { switchMode("learning"); refreshLearning().catch((error) => setStatus("learning-status", error.message, true)); });
-refreshLearning().catch((error) => setStatus("learning-status", error.message, true));

@@ -1,0 +1,4 @@
+# Retrieval corpus trailing blank lines are part of frozen source text hashes.
+# Keep the fixtures unchanged rather than removing source lines for linting.
+evals/retrieval/corpus/*.md whitespace=-blank-at-eof
+evals/retrieval/expanded-v1/corpus/*.md whitespace=-blank-at-eof

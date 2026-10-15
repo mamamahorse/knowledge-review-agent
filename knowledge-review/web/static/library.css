@@ -1,0 +1,25 @@
+.collection-tree{display:flex;flex-direction:column;gap:3px;margin:16px 0;max-height:260px;overflow:auto}
+.collection-node{text-align:left;border:0;background:transparent;border-radius:7px;padding:8px 10px;color:#41584e;font-size:13px;overflow-wrap:anywhere}
+.collection-node.active{background:#e4f1e7;color:#205e49;font-weight:700}
+.collection-node:hover{background:#f0f5ee}
+.collection-editor{margin:12px 0;font-size:12px;color:#526c5e}
+.collection-editor summary{cursor:pointer}
+.collection-editor form{display:grid;gap:8px;margin-top:10px}
+.collection-editor input,.collection-editor select,.collection-editor button,#learning-collection,#practice-scope,#practice-collection{max-width:100%;width:100%;border:1px solid #d5dfd7;border-radius:6px;background:#fff;padding:8px;font:inherit;color:#294d3e}
+.collection-editor button{background:#edf4ed;margin-top:5px}
+#collection-practice{margin:12px 0;width:100%}
+.learning-enroll{display:flex;flex-direction:column;gap:7px}.learning-enroll select{width:100%}
+.collection-label{font-size:11px;line-height:1.5;color:#657e6c;overflow-wrap:anywhere}
+.chat-actions button{flex:1;font-size:12px;white-space:nowrap;margin:0}
+.outline-panel { margin: 20px 0; padding: 16px; border: 1px solid var(--border, #dbe3e7); border-radius: 12px; }
+.outline-panel { min-width: 0; overflow-wrap: anywhere; }
+#outline-list { width: 100%; min-width: 0; max-width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #cdd9de; border-radius: 6px; font: inherit; }
+.outline-panel select, .outline-panel button { max-width: 100%; min-width: 0; }
+.outline-panel .practice-hint { line-height: 1.6; }
+.outline-chapter { padding: 10px 0; border-bottom: 1px solid #e4e9eb; }
+.outline-chapter p { margin: 5px 0; }
+.outline-field { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; font-size: 13px; }
+.outline-field input, .outline-field textarea, .outline-field select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cdd9de; border-radius: 6px; font: inherit; }
+.outline-check { display: flex; align-items: flex-start; gap: 8px; font-weight: 600; line-height: 1.6; }
+.outline-edit textarea { resize: vertical; }
+.outline-candidate .citation small { max-height: 90px; overflow: auto; }

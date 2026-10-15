@@ -75,7 +75,8 @@ class WebWorkspaceTests(unittest.TestCase):
             "question": "Explain this idea.", "strict": True, "response_language": "en",
         }
 
-        def answer(sources, question, tools, *, strict, focus, response_language):
+        def answer(sources, question, tools, *, strict, focus, response_language, before_request):
+            before_request()
             self.assertEqual(response_language, 'en')
             self.assertEqual(len(sources), 2)
             self.assertTrue(strict)

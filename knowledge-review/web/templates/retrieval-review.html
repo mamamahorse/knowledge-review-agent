@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检索标注审核 · Knowledge Review</title>
+<link rel="stylesheet" href="/static/retrieval-review.css"><script src="/static/retrieval-review.js?v=20261013-agent" defer></script></head>
+<body>
+<header><a href="/">Knowledge Review</a><h1>检索标注审核</h1><select id="benchmark" aria-label="选择标注集"></select></header>
+<p class="intro">检索评测由 Agent 评审并记录争议理由，无需逐条人工确认；无法可靠判定的样例明确排除。你仍可查看和修改，已有用户决定与冻结版本保留。Agent 标注不冒充人工 gold。0 无关或条件不符 · 1 部分支持 · 2 充分支持。</p>
+<p id="message" role="status" aria-live="polite"></p>
+<main><aside><h2>评审与修订记录</h2><p id="progress"></p><label><input id="show-all" type="checkbox"> 查看全部样例（含自动采用）</label><nav id="query-list" aria-label="查询列表"></nav>
+<details><summary>冻结标注版本</summary><p>处理剩余分歧后即可冻结；自动采用的样例无需逐条确认。冻结记录保留 Agent 与用户决定来源。</p>
+<form id="freeze-form"><label>版本确认人<input id="reviewer" maxlength="100" required></label>
+<label>版本说明<textarea id="freeze-note" maxlength="5000" required></textarea></label>
+<label><input id="freeze-confirm" type="checkbox" required> 剩余分歧已处理，确认冻结当前标注</label><button>冻结版本</button></form><div id="freeze-history"></div></details></aside>
+<section id="detail" hidden><h2 id="question"></h2><p id="metadata"></p>
+<div class="audit"><strong id="audit-status"></strong><p id="audit-reason"></p>
+<details><summary>保留的原始初标</summary><pre id="draft"></pre></details></div>
+<p id="audit-coverage" class="muted"></p>
+<h3>建议与必要事实</h3><div id="evidence-summary"></div>
+<div class="row"><h3>需要核对的原文</h3><select id="chunk-filter" aria-label="筛选片段"><option value="focus">仅分歧涉及的片段</option><option value="positive">已标相关</option><option value="all">全部片段</option><option value="unjudged">尚未判断</option></select></div>
+<div id="chunks"></div>
+<details id="advanced-edit"><summary>修改判断、证据组合或查看完整资料（可选）</summary>
+<div class="review-controls"><label><input id="answerable" type="checkbox"> 许可范围内可回答</label>
+<label>处理理由<textarea id="resolution" maxlength="5000" placeholder="直接采用建议无需填写；修改时可记录理由"></textarea></label>
+<label>审核备注 / 排除理由<textarea id="review-note" maxlength="5000"></textarea></label></div>
+<details><summary>完整许可原文与上下文</summary><div id="source-text"></div></details>
+<button id="mark-rest" type="button">将其余未判断片段标为无关</button>
+<h3>必要证据组</h3><p>每个组代表一个必须回答的事实。组内不同组合可以互相替代；同一组合里的片段必须同时检索到。</p>
+<div id="groups"></div><button id="add-group" type="button">添加必要证据组</button>
+<label><input id="scope-checked" type="checkbox"> 许可范围已完成判定（Agent 初审或手动补充）</label></details>
+<div class="savebar"><button id="approve" type="button">采用建议</button><button id="save-draft" type="button">保存待处理</button><button id="exclude" type="button">记录理由并排除</button></div>
+</section></main></body></html>

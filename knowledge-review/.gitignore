@@ -1,5 +1,39 @@
 .venv/
 __pycache__/
 .env
+.env.*
+!.env.example
 .models/
 .data/
+
+# Local databases include notes, conversations, answers, and cached vectors.
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-*
+
+# Test leftovers, generated reports, logs, and personal editor settings.
+.test-*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.py[cod]
+.coverage
+.coverage.*
+htmlcov/
+*.log
+*.out
+*.err
+*.pid
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Private credentials must not be committed even outside .env.
+*.pem
+*.key
+*.p12
+*.pfx
