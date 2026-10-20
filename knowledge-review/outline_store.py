@@ -174,6 +174,11 @@ class OutlineStore:
         with self.practice.transaction() as db:
             db.execute("UPDATE learning_outlines SET status='paused',updated_at=? WHERE id=? AND status IN ('queued','running')", (timestamp(), identity))
 
+            db.execute("UPDATE outline_batches SET status='failed',attempt=NULL,error=? WHERE outline_id=? AND status='running'",
+                       ('本段曾被暂停，可继续。', identity))
+            db.execute("UPDATE outline_context_steps SET status='failed',attempt=NULL,error=? WHERE outline_id=? AND status='running'",
+                       ('背景步骤曾被暂停，可继续。', identity))
+
     def claim_batch(self, identity):
         with self.practice.transaction() as db:
             job = db.execute("SELECT status FROM learning_outlines WHERE id=?", (identity,)).fetchone()

@@ -74,8 +74,21 @@ def fit_chunks(chunks, accepts):
     """Drop optional excerpts or shorten at whole original lines; permissions follow."""
     kept = []
     for chunk in chunks:
-        if accepts(kept + [chunk]):
-            kept.append(chunk)
+        if chunk in kept:
+            continue
+        supports = []
+        for start, end in chunk.context_ranges:
+            support = next((c for c in [*kept, *chunks] if c.source_id == chunk.source_id
+                            and c.line_start <= start and c.line_end >= end), None)
+            if support is None:
+                break
+            if support not in kept and support not in supports:
+                supports.append(support)
+        else:
+            if accepts(kept + supports + [chunk]):
+                kept.extend(supports + [chunk])
+                continue
+        if chunk.atomic or chunk.context_ranges:
             continue
         lines = chunk.text.splitlines()
         low, high, best = 1, len(lines) - 1, None

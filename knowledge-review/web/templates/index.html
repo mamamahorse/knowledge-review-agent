@@ -36,7 +36,7 @@
       </div>
       <div class="panel-heading">
         <div><span class="eyebrow">LIBRARY</span><h2>知识库</h2></div>
-        <label class="import-button" title="导入 Markdown 笔记">＋<input id="import-files" type="file" accept=".md,text/markdown" multiple hidden></label>
+        <label class="import-button" title="导入 Markdown 或 PDF">＋<input id="import-files" type="file" accept=".md,.pdf,text/markdown,application/pdf" multiple hidden></label>
       </div>
       <div id="collection-tree" class="collection-tree" aria-label="知识库和子集合"></div>
       <details class="collection-editor"><summary>新建知识库或子集合</summary>
@@ -59,7 +59,8 @@
       <p id="import-status" class="import-status" role="status"></p>
       <details class="collection-editor"><summary>移动当前文件到集合</summary>
         <select id="document-destination" aria-label="文件目标集合"></select><button id="move-document" type="button">移动文件</button>
-        <label>替换当前文件正文 <input id="replace-document" type="file" accept=".md"></label>
+        <label>替换当前文件正文 <input id="replace-document" type="file" accept=".md,.pdf"></label>
+        <button id="reparse-document" type="button" hidden>重新解析 PDF</button>
         <button id="remove-document" type="button">移出资料库，保留旧题依据</button>
         <p class="sidebar-hint">替换保留文件身份及名称。移出后不能再查阅；本机原始导入文件和旧练习快照保留。</p>
       </details>
@@ -77,7 +78,7 @@
       <div id="reader-scroll" class="reader-scroll">
         <article id="rendered-note" class="markdown-body"></article>
         <div id="source-note" class="source-note" hidden></div>
-        <div id="reader-empty" class="reader-empty">从左侧选择一份 Markdown 笔记开始阅读。</div>
+        <div id="reader-empty" class="reader-empty">从左侧选择一份 Markdown 或 PDF 开始阅读。</div>
       </div>
     </section>
 

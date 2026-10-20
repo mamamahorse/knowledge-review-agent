@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Literal
 
+from agent_cancel import model_http_options
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -80,7 +81,7 @@ def summary_messages(old, added):
 
 def generate_summary(old, added, budget, *, before_request=None):
     model, options = model_settings()
-    with OpenAI(**options) as client:
+    with OpenAI(**{**options, **model_http_options()}) as client:
         result = request_structured(client, model, summary_messages(old, added), ChatSummary, budget=budget,
                                     before_request=before_request)
     return result, model

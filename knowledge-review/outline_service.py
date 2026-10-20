@@ -1,5 +1,6 @@
 """Bounded source analysis, reviewable proposals, and explicit atomic enrollment."""
 
+from agent_work import job_boundary
 import json
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -159,6 +160,7 @@ def require_current(job, current_snapshots):
         raise OutlineBusy('集合资料或文件版本已变化；旧清单保留供查看，请按当前资料生成新清单。')
 
 
+@job_boundary("outline")
 def run_outline(store, identity, current_snapshots):
     owns_lock = False
     try:

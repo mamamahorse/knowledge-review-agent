@@ -1,5 +1,15 @@
 # Knowledge Review 开发约定
 
+2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
+
+
+2026-10-16：新增最小 Gateway SSE 适配，复用原 execute_turn/run_agent 和 SQLite 提交流程；GET /healthz 不调用模型，POST /api/conversations/{identity}/turns/stream 提供真实执行进度和保存后的最终结果。原 JSON API 保持。SSE 每进程最多4个实际同步工作，客户端断连不提前释放槽位；不是逐 token 或完整业务取消。12项新增、80项相关原有测试和10项可控 HTTP 链路检查通过，无外部模型调用，不代表模型质量或原项目全量回归。详细调用链、原因、运行方法和边界见 docs/gateway-sse.md。容器最终验证见独立 Gateway 仓库的 README/evidence，本项目不包含 C++ 实现；无自动提交/推送。
+
+
+2026-10-15 后续用户明确要求：视觉模型可配置，未配置默认复用原聊天模型，不能因缺少 VLM_MODEL 就禁用。pdf_vision.vision_settings 按字段 VLM_* 非空优先、LLM_* 兜底；明确不支持图片时按连接/模型/凭据指纹缓存，401/429/超时/无效图片/结构化协议错误不误判。导入兜底仍由 PDF_VLM_ENABLED 控制；普通文字功能不受视觉拒绝影响。deepseek-flash 已完成真实合成图片及完整 Agent→最终视觉引用验证（4.914s/11.841s 单样例），不是复杂文档质量评测。表格支持邻近表题/单位/脚注原文依赖与 read_table 行分页/已提取覆盖标记，不把 top-k 行当整表；新可选上下文字段为空时不改变旧快照序列化身份。下段“VLM_MODEL配置后才”已被本段替代。
+
+2026-10-15 PDF 第一版见 docs/pdf-document-design.md。Document/ContentBlock/Asset 在 document_model.py；Source.document 统一承载结构，Markdown 文本和旧 source_id 保持。pdf_parser.py 默认 PyMuPDF，Docling 为显式可选依赖/离线模型，尚无真实 Docling 模型验收；PDF 来源绑定原文件及解析快照，不在阅读时重跑。网页接入导入/页面资源/替换/重新解析，library_store 增加可空 source_json/snapshot_json 列，旧行保留。表格文本子块与真实表头分开引用，Embedding、工具与最终预算均需保持依赖，不把非连续范围伪装为连续原文。VLM_MODEL 配置后才提供 inspect_visual；PDF_VLM_ENABLED=1 才导入转写，最多3页，失败保留 partial。视觉观察独立进入最终请求及存档，asset_id 只有成功查看才可引用；纯图片导航标签不能作为原文出题。测试仅用合成 PDF、隔离目录与受控服务，不能称真实 VLM 质量通过。视觉向量检索/通用超宽与跨页表格/整表精确计算仍后续；新开发不自动提交或推送。
+
 2026-10-15：用户明确授权本批整理并提交、推送到既有origin/learning-loop-mvp。只纳入knowledge-review的非忽略应用文件，根三份未跟踪设计保留且不纳入；密钥、个人数据、模型与运行产物不上传。本次授权不意味着以后自动提交/推送。上传边界与公开实验报告见docs/git-management.md及evals/retrieval/expanded-v1/results-20261013.md；原固定语料末尾空行不能为格式检查改写。
 
 2026-10-13 最新用户授权：后续检索评测相关性/条件/证据与争议由Agent自行判定、留理由、冻结，无需逐项请示；不改称人工gold，不用被测排名追改test标签。无法可靠判定明确excluded，用户原有决定/草稿和旧冻结不可覆盖；自主评审不等于自动加入学习计划。B已接入网页search_notes：网页默认hybrid、可切dense并保存偏好，API/CLI/KnowledgeTools默认dense兼容旧客户端及A基线。未搜不加载E5/BM25、每路50等权RRF再返回≤10、只有许可prepared chunks统计/原文引用，C仍离线。旧mode缺字段比较时补dense、JSON类型保持、原存档不改，失败重试可换mode而不新建轮次/学习记录。成功/失败存程序检索诊断，不存隐藏思维链；Agent/最终预算范围分存。真实最终模型曾误称前面搜索不可用，已加completed_actions程序记录进完整预算，40相关测试/真实样例复核；失败报告保留。详情见docs/production-hybrid-search.md；下文“正式保持A/须用户核对”均历史阶段。
@@ -182,3 +192,13 @@ Windows 沙箱中 `tempfile` 创建的目录曾出现权限问题。测试文件
 原候选/原建议不覆盖，新结论另存；补读动作的说明及暂时未解决状态不是最终决定。未解决允许带非绑定修订建议，但不能直接采用；正向结论不得夹带必须修正候选的前提。明确采用后新增接受分组或保留独立，仍不创建学习记录，加入沿用旧原子事务和独立 FSRS。候选/建议 revision、资料范围、attempt 与父 OS 锁维护并发；网络不持写事务，暂停/修改立即撤销迟到发布。没有删除入口和自动换引用入口；需扩大候选证据时重新生成。
 
 专项测试 test_outline_review.py；quality_source_review.py 默认 smoke、显式 live，合成固定候选与原提取评测分开。保留失败报告；输入保守估计合规不保证服务实际 token 或输出完整。真实样例有输出截断和与参考草案不同的保守修订结论，不能当作成功率或全面语义正确性。继续维护开发记录中的实际问题/方法/理由，不引入额外框架或改变模型服务。
+
+
+2026-10-19 M2.3.2：网关已接入的JSON/SSE支持请求范围内的模型HTTP取消。复用原同步业务函数，agent_cancel.py以协作式标志和异步httpx传输关闭模型I/O；execute_turn沿用failed保存取消说明，完成后再释放实际工作槽。已提交结果不回滚；CPU/文件/SQLite/DNS阻塞不强杀，供应商远端计算是否停止未经验证。范围内SDK自动重试关闭；范围外CLI和后台任务仍用原传输。后台202/独立标题治理、Python实际任务指标、完整真实embedding/RAG部署仍未完成。调用链、取消边界和复现见docs/gateway-sse.md及独立Gateway仓库docs/CANCELLATION.md；测试结果以Gateway对应日期evidence为准，无自动提交/推送。
+
+
+2026-10-20 M2.3.3：8个清单/归组/来源核查/路线的后台提交与继续入口，和自动标题，接入原共享模型工作池。先预留槽再创建记录，202返回不释放实际名额；提交者断连/Gateway重启不取消已接受工作。原pause入口先使attempt失效再请求取消模型HTTP，真实Future结束（含连接清理）才释放。嵌套自动核查复用父工作槽与Token；已完成结果保留，原暂停/继续/幂等契约及SQLite结构不变。
+
+标题最多1个；workers>1时至少保留一个未占槽，单worker只在空闲启动且不抢占。忙时跳过无等待队列，失败用已有title_started_at冷却30秒。增加内部GET /internal/metrics，只在进程内聚合request/background/title；Gateway通过受Key保护的GET /agent-metrics固定代理读取。/metrics仍是Gateway本地请求观察，两者不能混同。Agent端口不要直接对不可信网络开放。
+
+相关回归255项（含新增治理16项）、普通/ASan同批103项、真实受控链路与容器各同12组治理检查通过；工具/源码同步最终状态以独立Gateway的evidence/m233-verification-20261020.json为准。原Python不是全量discover，本轮没有外部模型/回答质量/embedding-RAG验收。进程重启计数重置，中断工作沿用原恢复后显式继续，不自动重放。CPU/文件/SQLite/DNS等阻塞不强杀，供应商远端停算未验证，分布式并发/V3仍未实现。详细改动理由、字段、接口和命令见Gateway仓库docs/JOB_GOVERNANCE.md；继续维护其docs/DEVELOPMENT_LOG.md。未自动提交或推送。

@@ -3,6 +3,7 @@
 from typing import Literal
 import json
 
+from agent_cancel import model_http_options
 from openai import APIError, ContentFilterFinishReasonError, LengthFinishReasonError, OpenAI
 from pydantic import Field, ValidationError
 
@@ -92,7 +93,7 @@ def parse_grade(value):
 def _request_structured(messages: list[dict], schema: type[StrictModel], *, before_request=None):
     model, options = model_settings()
     try:
-        with OpenAI(**options) as client:
+        with OpenAI(**{**options, **model_http_options()}) as client:
             return request_structured(client, model, messages, schema, before_request=before_request)
     except APIError as exc:
         raise RuntimeError(f"practice model request failed: {exc}") from exc
@@ -114,7 +115,17 @@ def validate_question(draft: QuestionDraft, sources: list[Source], visible: list
         not point.strip() for point in draft.rubric_points
     ):
         raise ValueError("Practice rubric points must be distinct and nonempty.")
+    by_id = {s.source_id: s for s in sources}
+    def check_text_basis(citation):
+        source = by_id.get(citation.source_id)
+        if citation.asset_id is not None:
+            raise ValueError('当前文字出题流程没有获得视觉观察的引用资格。')
+        if source and source.document and source.document.format == 'pdf' and not any(
+            b.kind not in ('page', 'figure') and b.line_start <= citation.line_end and b.line_end >= citation.line_start
+            for b in source.document.blocks):
+            raise ValueError('图片导航标签不能作为文字出题依据。')
     for citation in draft.citations:
+        check_text_basis(citation)
         if not citation_is_visible(citation.source_id, citation.line_start, citation.line_end, visible):
             raise ValueError("A practice question cited lines outside its visible source context.")
     if draft.learning:
@@ -122,6 +133,7 @@ def validate_question(draft: QuestionDraft, sources: list[Source], visible: list
         if any(not point.strip() for point in criteria) or len(set(criteria)) != len(criteria):
             raise ValueError("Target criteria must be distinct and nonempty.")
         for citation in draft.learning.knowledge.citations:
+            check_text_basis(citation)
             if not citation_is_visible(citation.source_id, citation.line_start, citation.line_end, visible):
                 raise ValueError("Knowledge cited lines outside its visible source context.")
         if sorted(set(draft.criterion_indices)) != list(range(1, len(criteria) + 1)):

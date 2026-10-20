@@ -1,6 +1,6 @@
 """Split Markdown at block boundaries while preserving original line positions."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 
 from markdown_it import MarkdownIt
@@ -19,6 +19,12 @@ class Chunk:
     line_end: int
     text: str
     section_paths: tuple[tuple[str, ...], ...] = ()
+    block_id: str | None = None
+    kind: str = 'text'
+    context_ranges: tuple[tuple[int, int], ...] = ()
+    retrieval_context: str = ''
+    atomic: bool = False
+    table_header_range: tuple[int, int] | None = None
 
 
 def section_label(chunk: Chunk) -> str:
@@ -34,6 +40,8 @@ def chunk_source(source: Source, max_chars: int = 1200, min_chars: int = 100) ->
         raise ValueError("max_chars must be positive.")
     if not 0 <= min_chars <= max_chars:
         raise ValueError("min_chars must be between 0 and max_chars.")
+    if source.document and source.document.format == 'pdf':
+        return document_chunks(source, max_chars)
     lines = source.text.splitlines()
     tokens = MarkdownIt("commonmark").enable("table").parse(source.text)
     # Only outer blocks: a heading inside a quote/list is part of that block.
@@ -110,7 +118,113 @@ def chunk_source(source: Source, max_chars: int = 1200, min_chars: int = 100) ->
                 )
                 continue
         merged.append(chunk)
-    return merged
+    return protect_tables(merged, source)
+
+
+def block_chunk(source, block, start=None, end=None, *, lines=None):
+    start = block.line_start if start is None else start
+    end = block.line_end if end is None else end
+    lines = source.text.splitlines() if lines is None else lines
+    context = tuple((a, b) for a, b in block.context_ranges if not (start <= a and end >= b))
+    header = ''
+    if block.header_end is not None:
+        header = '\n'.join(lines[block.line_start - 1:block.header_end])
+        if start > block.line_start or end < block.header_end:
+            context = (*context, (block.line_start, block.header_end))
+    if block.context_ranges:
+        header = '\n'.join(['\n'.join(lines[a - 1:b]) for a, b in block.context_ranges] + [header])
+    identity = f'{source.source_id}:structured-v1:{start}:{end}:{block.block_id}'
+    if block.context_ranges:
+        identity += ':context-v1:' + str(block.context_ranges)
+    return Chunk(sha256(identity.encode()).hexdigest(),
+        source.source_id, block.heading_path, start, end, '\n'.join(lines[start - 1:end]),
+        (block.heading_path,), block.block_id, block.kind, context, header,
+        block.kind in ('table', 'figure', 'formula'),
+        (block.line_start, block.header_end) if block.header_end is not None else None)
+
+
+def document_chunks(source, max_chars=1200):
+    chunks = []
+    lines = source.text.splitlines()
+    for block in source.document.blocks:
+        if block.kind == 'page':
+            continue
+        chunk = block_chunk(source, block, lines=lines)
+        # Structured objects remain parents; their retrieval windows are prepared later.
+        if chunk.atomic or len(chunk.text) <= max_chars:
+            chunks.append(chunk)
+            continue
+        start, size = block.line_start, 0
+        for line in range(start, block.line_end + 1):
+            if size and size + len(lines[line - 1]) > max_chars:
+                chunks.append(block_chunk(source, block, start, line - 1, lines=lines))
+                start, size = line, 0
+            size += len(lines[line - 1]) + 1
+        chunks.append(block_chunk(source, block, start, block.line_end, lines=lines))
+    return chunks
+
+
+def protect_tables(chunks, source):
+    tables = [b for b in source.document.blocks if b.kind == 'table'] if source.document else []
+    if not tables:
+        return chunks
+    lines, result = source.text.splitlines(), []
+    for chunk in chunks:
+        tables_here = [b for b in tables if b.line_start <= chunk.line_end and b.line_end >= chunk.line_start]
+        start = chunk.line_start
+        for table in tables_here:
+            if start < table.line_start:
+                end = table.line_start - 1
+                result.append(replace(chunk, line_start=start, line_end=end,
+                    text='\n'.join(lines[start - 1:end]),
+                    chunk_id=sha256(f'{chunk.chunk_id}:before-table:{start}:{end}'.encode()).hexdigest()))
+            result.append(replace(block_chunk(source, table, lines=lines), heading_path=chunk.heading_path,
+                                  section_paths=chunk.section_paths))
+            start = table.line_end + 1
+        if start <= chunk.line_end:
+            if not tables_here:
+                result.append(chunk)
+            else:
+                result.append(replace(chunk, line_start=start, text='\n'.join(lines[start - 1:chunk.line_end]),
+                    chunk_id=sha256(f'{chunk.chunk_id}:after-table:{start}'.encode()).hexdigest()))
+    return result
+
+
+def with_table_context(chunks, sources):
+    """Real header excerpts get separate ranges; never invent a continuous citation."""
+    by_id = {s.source_id: s for s in sources}
+    result, seen = [], set()
+    for chunk in chunks:
+        for start, end in chunk.context_ranges:
+            key = (chunk.source_id, start, end)
+            if key not in seen:
+                source = by_id[chunk.source_id]
+                result.append(Chunk(sha256(f'{key}:table-header-v1'.encode()).hexdigest(), chunk.source_id,
+                    chunk.heading_path, start, end, '\n'.join(source.text.splitlines()[start - 1:end]),
+                    chunk.section_paths, chunk.block_id,
+                    'table_header' if (start, end) == chunk.table_header_range else 'table_context', atomic=True))
+                seen.add(key)
+        key = (chunk.source_id, chunk.line_start, chunk.line_end)
+        if key not in seen:
+            result.append(chunk)
+            seen.add(key)
+    return result
+
+
+def protect_selection(chunk, source):
+    tables = [b for b in source.document.blocks if b.kind == 'table'
+              and b.line_start <= chunk.line_end and b.line_end >= chunk.line_start] if source.document else []
+    if not tables:
+        return [chunk]
+    ranges = []
+    for block in tables:
+        related = list(block.context_ranges)
+        if block.header_end:
+            related.append((block.line_start, block.header_end))
+        for start, end in related:
+            if not (chunk.line_start <= start and chunk.line_end >= end) and (start, end) not in ranges:
+                ranges.append((start, end))
+    return with_table_context([replace(chunk, kind='table', atomic=True, context_ranges=tuple(ranges))], [source])
 
 
 def format_chunks(chunks: list[Chunk], sources: list[Source], max_chars: int) -> str:

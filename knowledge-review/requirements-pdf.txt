@@ -1,0 +1,2 @@
+# Small local parser/rendering dependency. No model download is required.
+pymupdf>=1.26,<1.28

@@ -17,6 +17,7 @@ class Citation(StrictModel):
     source_id: str = Field(description="Identity of the supplied source version supporting this content.")
     line_start: int = Field(description="First original source line in the supporting visible excerpt, 1-based.")
     line_end: int = Field(description="Last original source line in the supporting visible excerpt, inclusive.")
+    asset_id: str | None = Field(default=None, description='Only for a successfully viewed visual asset; otherwise null.')
 
 
 class AnswerBlock(StrictModel):
@@ -49,6 +50,7 @@ class SourceOnlyAnswer(NoteAnswer):
 def validate_answer(
     result: NoteAnswer, sources: list[Source], strict: bool = False,
     *, chunks: list[Chunk] | None = None,
+    visual_evidence: list[dict] | None = None,
 ) -> None:
     if chunks is not None:
         validate_chunks(chunks, sources)
@@ -78,6 +80,16 @@ def validate_answer(
             source = by_id.get(citation.source_id)
             if source is None:
                 raise RuntimeError("the model cited an unknown source or source version.")
+            if citation.asset_id is not None and not any(
+                v['source_id'] == citation.source_id and v['asset_id'] == citation.asset_id
+                and v['line_start'] <= citation.line_start <= citation.line_end <= v['line_end']
+                for v in visual_evidence or []):
+                raise RuntimeError('the model cited a visual asset that was not successfully viewed.')
+            if citation.asset_id is None and source.document and source.document.format == 'pdf':
+                evidence_blocks = [b for b in source.document.blocks
+                    if b.line_start <= citation.line_end and b.line_end >= citation.line_start]
+                if not any(b.kind not in ('page', 'figure') for b in evidence_blocks):
+                    raise RuntimeError('image navigation labels are not textual evidence; view the visual asset first.')
             if not 1 <= citation.line_start <= citation.line_end <= len(source.text.splitlines()):
                 raise RuntimeError("the model cited an invalid line range.")
             if chunks is not None and not citation_is_visible(

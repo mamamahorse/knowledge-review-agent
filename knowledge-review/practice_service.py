@@ -4,7 +4,7 @@ from hashlib import sha256
 import re
 from itertools import zip_longest
 
-from chunking import Chunk, chunk_source
+from chunking import Chunk, chunk_source, with_table_context
 from embedding_config import select_embedding_config
 from knowledge_tools import KnowledgeTools
 from agent_loop import document_focus
@@ -16,6 +16,7 @@ from practice_store import (
     MAX_QUESTIONS_PER_SESSION, PracticeStore, archived_sources, public_session,
 )
 from sources import Source
+from document_model import snapshot_metadata
 from response_preferences import ResponseLanguage, validate_language
 
 
@@ -39,13 +40,14 @@ def start_practice(
     if whole_scope:
         goal = objective.strip() or ("理解当前资料中的一个重要知识点" if response_language == "zh" else
                                     "Understand an important concept in the current material")
-    required = [] if whole_scope else [document_focus(focus_source, start, end).chunk]
+    focus = None if whole_scope else document_focus(focus_source, start, end)
+    required = [*focus.support_chunks, focus.chunk] if focus else []
     if whole_scope:
         # Round-robin documents and spaced sections avoid spending the entire budget on the first file.
         terms = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]{2}", objective.lower()))
         groups = []
         for source in sources:
-            chunks = chunk_source(source)
+            chunks = [c for c in chunk_source(source) if c.kind != 'figure']
             spaced = sorted(range(len(chunks)), key=lambda i: (i % 4, i))
             ordered = [chunks[i] for i in spaced]
             if terms:
@@ -57,7 +59,7 @@ def start_practice(
         if len(sources) > 1:
             tools = KnowledgeTools(sources, select_embedding_config("e5-small"))
             query = objective.strip() or required[0].text[:240]
-            optional = [hit.chunk for hit in tools.search_notes(query, top_k=3).hits if hit.chunk not in required]
+            optional = with_table_context([hit.chunk for hit in tools.search_notes(query, top_k=3).hits if hit.chunk not in required], sources)
     budget = GenerationBudget.from_env()
     protocols = structured_protocols(LearningQuestionDraft)
     # A whole-scope question should leave room for its saved rubric, learner answer
@@ -82,7 +84,7 @@ def start_practice(
     snapshots = [{
         "document_id": document_ids_by_source[source.source_id],
         "source_id": source.source_id,
-        "path": str(source.path), "name": source.path.name, "text": source.text,
+        "path": str(source.path), "name": source.path.name, "text": source.text, **snapshot_metadata(source),
     } for source in sources if source.source_id in visible_source_ids]
     ranges = [{"source_id": chunk.source_id, "line_start": chunk.line_start,
                "line_end": chunk.line_end} for chunk in visible]

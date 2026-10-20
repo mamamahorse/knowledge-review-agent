@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from answers import render_answer
-from chunking import chunk_source, format_chunks
+from chunking import chunk_source, format_chunks, with_table_context
 from embedding_config import select_embedding_config
 from model_client import answer_question
 from sources import load_sources, format_sources
@@ -12,8 +12,8 @@ from sources import load_sources, format_sources
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Read and ask questions about Markdown notes.")
-    parser.add_argument("note", nargs="*", type=Path, help="Paths to UTF-8 Markdown files.")
+    parser = argparse.ArgumentParser(description="Read and ask questions about Markdown and PDF documents.")
+    parser.add_argument("note", nargs="*", type=Path, help="Paths to UTF-8 Markdown or PDF files.")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("-q", "--question", help="Ask a question instead of previewing notes.")
     mode.add_argument("--chunks", action="store_true", help="Preview Markdown chunks locally.")
@@ -119,7 +119,7 @@ def main() -> None:
         print(format_hits(result.hits, sources, args.chunk_size))
         if not args.rag:
             return
-        retrieved_chunks = [hit.chunk for hit in result.hits]
+        retrieved_chunks = with_table_context([hit.chunk for hit in result.hits], sources)
         print("\n检索完成：将以上片段发送给对话模型生成回答。", flush=True)
     if args.chunks:
         chunks = [chunk for source in sources for chunk in chunk_source(source, args.chunk_size, args.chunk_min)]

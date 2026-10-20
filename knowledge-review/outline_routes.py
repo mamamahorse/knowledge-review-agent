@@ -1,4 +1,5 @@
 """Generate a bounded, recoverable route; human decisions never enroll or gate."""
+from agent_work import job_boundary
 import json
 from contextlib import closing
 from uuid import uuid4
@@ -83,6 +84,7 @@ def start_route(store, outline_id, request_id, language, candidate_ids, current,
         return identity
 
 
+@job_boundary("route")
 def run_route(store, identity, current):
     attempt=page=None; locked=False
     try:

@@ -1,6 +1,14 @@
 # Knowledge Review：第一版产品设计与后续路线
 
+2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
+
+
+2026-10-16：新增最小 Gateway SSE 适配，复用原 execute_turn/run_agent 和 SQLite 提交流程；GET /healthz 不调用模型，POST /api/conversations/{identity}/turns/stream 提供真实执行进度和保存后的最终结果。原 JSON API 保持。SSE 每进程最多4个实际同步工作，客户端断连不提前释放槽位；不是逐 token 或完整业务取消。12项新增、80项相关原有测试和10项可控 HTTP 链路检查通过，无外部模型调用，不代表模型质量或原项目全量回归。详细调用链、原因、运行方法和边界见 docs/gateway-sse.md。容器最终验证见独立 Gateway 仓库的 README/evidence，本项目不包含 C++ 实现；无自动提交/推送。
+
+
 日期：2026-09-10。
+
+2026-10-15：已开始按 [PDF 与统一文档设计](pdf-document-design.md) 扩展资料格式，当前已实现基础 PDF 导入、统一结构、原始视觉资源、表格表头/说明保护、行分页与提取覆盖提示、按页/区域查看与版本快照。视觉模型可配置，默认复用聊天模型并处理明确的图片不支持错误；已通过真实合成图片和 Agent 视觉引用链路，复杂文档质量仍待验收。原生视觉向量检索、通用跨页/合并表格恢复及精确整表计算仍后续。下文“第一版只接入 Markdown”保留为最初范围，当前能力以该实现文档为准。
 
 2026-10-04 用户确认并已实现的更新：聊天由模型在首次成功回复后自动命名；文档练习默认整篇、选段可选；知识库采用可嵌套的 collection，支持多知识库、Markdown 文件导入/归属、按集合开始练习，以及主动加入计划时选择总知识库或特定集合。父集合包含后代文件和计划。进一步已实现集合资料生成可审核知识点/目标清单、章节分析进度、审核修改、勾选后生成首题并加入计划；前置关系、完整路线和掌握覆盖评估仍未实现。实际说明见 [集合与练习](collections-and-practice.md) 和 [集合学习清单](collection-learning-outline.md)。下文包含早期规划与历次阶段记录，当前完成范围以这两份实现文档为准。
 
@@ -238,3 +246,13 @@ Markdown 阅读页面需要保留渲染内容与原文位置的对应关系，�
 2026-10-07 阶段 B1 已实现可审核的跨章节知识归组与重复目标代表选择，接受后仍由用户选择加入；不同能力目标独立复习，原候选和已有调度保留。一次有界比较超预算需要缩小候选范围；大候选集自动分层整合、自主原文复查、前置关系与学习顺序仍未实现。实际流程及边界见 [B1 实现](collection-learning-outline.md#跨章节归组审核实现2026-10-07)。此前“跨章节候选整合未实现”是阶段 A 时的历史状态。
 
 2026-10-09 已补齐大候选集自动分层整合：按完整请求输入、输出估计及单次契约选择方式，保留独立/远处候选参与跨节点比较，导航关联补回固定原文核验。保存逐步回执、预算、版本与额度，暂停/继续复用完成结果；大组要求每对成员原文支持，仍交用户审核及选择加入。最坏比较量平方级，回执不是语义完整性保证；自主调查未引用原文、前置关系、学习顺序与跨清单去重仍未实现。详细边界及验证见 [实际分层整合](collection-learning-outline.md#大候选集自动分层整合实现2026-10-09)。
+
+
+2026-10-19 M2.3.2：网关已接入的JSON/SSE支持请求范围内的模型HTTP取消。复用原同步业务函数，agent_cancel.py以协作式标志和异步httpx传输关闭模型I/O；execute_turn沿用failed保存取消说明，完成后再释放实际工作槽。已提交结果不回滚；CPU/文件/SQLite/DNS阻塞不强杀，供应商远端计算是否停止未经验证。范围内SDK自动重试关闭；范围外CLI和后台任务仍用原传输。后台202/独立标题治理、Python实际任务指标、完整真实embedding/RAG部署仍未完成。调用链、取消边界和复现见docs/gateway-sse.md及独立Gateway仓库docs/CANCELLATION.md；测试结果以Gateway对应日期evidence为准，无自动提交/推送。
+
+
+2026-10-20 M2.3.3：8个清单/归组/来源核查/路线的后台提交与继续入口，和自动标题，接入原共享模型工作池。先预留槽再创建记录，202返回不释放实际名额；提交者断连/Gateway重启不取消已接受工作。原pause入口先使attempt失效再请求取消模型HTTP，真实Future结束（含连接清理）才释放。嵌套自动核查复用父工作槽与Token；已完成结果保留，原暂停/继续/幂等契约及SQLite结构不变。
+
+标题最多1个；workers>1时至少保留一个未占槽，单worker只在空闲启动且不抢占。忙时跳过无等待队列，失败用已有title_started_at冷却30秒。增加内部GET /internal/metrics，只在进程内聚合request/background/title；Gateway通过受Key保护的GET /agent-metrics固定代理读取。/metrics仍是Gateway本地请求观察，两者不能混同。Agent端口不要直接对不可信网络开放。
+
+相关回归255项（含新增治理16项）、普通/ASan同批103项、真实受控链路与容器各同12组治理检查通过；工具/源码同步最终状态以独立Gateway的evidence/m233-verification-20261020.json为准。原Python不是全量discover，本轮没有外部模型/回答质量/embedding-RAG验收。进程重启计数重置，中断工作沿用原恢复后显式继续，不自动重放。CPU/文件/SQLite/DNS等阻塞不强杀，供应商远端停算未验证，分布式并发/V3仍未实现。详细改动理由、字段、接口和命令见Gateway仓库docs/JOB_GOVERNANCE.md；继续维护其docs/DEVELOPMENT_LOG.md。未自动提交或推送。

@@ -204,3 +204,15 @@ async function initializeLibrary() {
   await openCollection(state.collections.some((c) => c.id === saved) ? saved : "root");
 }
 document.addEventListener("DOMContentLoaded", () => initializeLibrary().catch(libraryError), { once: true });
+$('reparse-document').addEventListener('click', async () => {
+  const current = state.current;
+  if (!current || current.format !== 'pdf') return;
+  const button = $('reparse-document'); button.disabled = true;
+  setStatus('library-status', '正在重新解析 PDF，旧快照会保留……');
+  try {
+    await request(`/api/documents/${current.id}/reparse?expected_source_id=${encodeURIComponent(current.source_id)}`, {method: 'POST'});
+    if (state.current?.id === current.id) await openDocument(current.id);
+    setStatus('library-status', '解析完成，已有问答和练习保留各自的版本依据。');
+  } catch (error) { libraryError(error); }
+  finally { button.disabled = false; }
+});

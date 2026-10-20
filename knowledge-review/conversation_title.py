@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import replace
 
+from agent_cancel import GenerationCancelled, checkpoint, model_http_options
 from openai import OpenAI
 from pydantic import Field
 
@@ -27,7 +28,7 @@ def generate_title(question, answer, language):
                 {"role": "user", "content": json.dumps({"opening_excerpts": {
                     "user": question[:2000], "assistant": answer[:2000]}}, ensure_ascii=False)}] + preference_messages(language)
     budget = replace(GenerationBudget.from_env(), output_tokens=512)
-    with OpenAI(**{**options, "timeout": 20.0, "max_retries": 0}) as client:
+    with OpenAI(**{**options, "timeout": 20.0, "max_retries": 0, **model_http_options()}) as client:
         title = request_structured(client, model, messages, ChatTitle, budget=budget).title.strip()
     if not title or "\n" in title:
         raise ValueError("Invalid chat title")
@@ -51,13 +52,24 @@ def auto_title(store, identity, language):
         store.assert_dependencies([{"conversation_id": identity, "revision": chat["memory_revision"]}])
         question, answer = history[0]["content"], history[1]["content"]
         title = generate_title(question, answer, language)
+    except GenerationCancelled:
+        store.publish_title(identity, attempt)
+        raise
     except Exception as exc:
         logging.getLogger(__name__).warning("Chat title generation failed (%s)", type(exc).__name__)
         store.publish_title(identity, attempt)
+        return 'failed'
     else:
         try:
             store.assert_dependencies([{"conversation_id": identity, "revision": chat["memory_revision"]}])
         except ValueError:
             store.publish_title(identity, attempt)
             return
+        try:
+            checkpoint()
+        except GenerationCancelled:
+            store.publish_title(identity, attempt)
+            raise
         store.publish_title(identity, attempt, title)
+        saved = store.get_conversation(identity)
+        return 'completed' if saved['title_state'] == 'generated' and saved['title'] == title else 'skipped'

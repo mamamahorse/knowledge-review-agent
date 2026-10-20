@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import unittest
+from test_agent_governance import wait_for
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
@@ -243,7 +244,12 @@ class OutlineTests(unittest.TestCase):
             run_outline(self.store, identity, self.current)
             self.assertEqual(model.call_count, 1)
         self.assertEqual(self.store.get(identity)['status'], 'paused')
-        self.assertEqual(len(self.store.get(identity)['candidates']), 1)
+        self.assertEqual(len(self.store.get(identity)['candidates']), 0)
+        self.assertTrue(any(b['status'] == 'failed' for b in self.store.get(identity)['batches']))
+        self.store.resume(identity)
+        with patch('outline_service._request_structured', side_effect=fake_model):
+            run_outline(self.store, identity, self.current)
+        self.assertEqual(self.store.get(identity)['status'], 'completed')
 
     def test_http_nested_collection_empty_scope_and_corrected_hint(self):
         app = create_app(self.root / 'uploads', self.practice.path)
@@ -255,6 +261,7 @@ class OutlineTests(unittest.TestCase):
             response = client.post(f'/api/collections/{parent}/outlines', json={'request_id': 'api', 'response_language': 'en'})
             self.assertEqual(response.status_code, 202, response.text)
             identity = response.json()['id']
+            wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
             job = client.get(f'/api/outlines/{identity}').json()
             self.assertEqual(job['response_language'], 'en')
             self.assertEqual({s['document_id'] for s in job['coverage']}, {imported['id']})

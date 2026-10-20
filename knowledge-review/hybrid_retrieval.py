@@ -62,7 +62,7 @@ class HybridConfig:
                 'tf': 'tf*(k1+1)/(tf+k1*(1-b+b*length/avg_length))',
                 'query_tf': 'unique terms; no query-frequency weighting',
                 'index_scope': 'statistics and postings built only from permitted prepared chunks',
-                'text_field': 'original chunk text only; no filename boost',
+                'text_field': 'original chunk text; structured table windows include original headers; no filename boost',
                 'fusion': 'equal-weight sum(1/(rrf_k+one_based_rank)); absent branch contributes zero',
                 'tie_break': 'original manifest chunk order',
                 'zero_overlap': 'BM25 returns no zero-score filler',
@@ -79,7 +79,7 @@ class BM25Index:
         self.postings = defaultdict(list)
         self.lengths = []
         for i, chunk in enumerate(self.chunks):
-            terms = lexical_tokens(chunk.text)
+            terms = lexical_tokens((chunk.retrieval_context + '\n' if chunk.retrieval_context else '') + chunk.text)
             self.lengths.append(len(terms))
             for term, count in Counter(terms).items():
                 self.postings[term].append((i, count))

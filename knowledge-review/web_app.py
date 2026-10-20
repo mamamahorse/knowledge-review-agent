@@ -2,8 +2,9 @@
 
 import logging
 import re
+import json
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import escape
 from pathlib import Path
 from uuid import uuid4
@@ -11,12 +12,15 @@ from typing import Literal
 from hashlib import sha256
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile, BackgroundTasks
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent_cancel import GenerationCancelled, checkpoint
+from agent_stream import StreamRunner
 from agent_loop import document_focus, run_agent
 from embedding_config import select_embedding_config
 from knowledge_tools import KnowledgeTools, knowledge_tool_definitions
@@ -26,7 +30,8 @@ from learning_store import LearningStore
 from learning_types import Assessment, Capability, ReviewRating, LearningDraft
 from learning_service import enroll_question, start_review, add_dimension, correct_grade
 from response_preferences import ResponseLanguage
-from sources import Source, load_sources
+from sources import Source, load_sources, source_from_document
+from document_model import Document as ParsedDocument, snapshot_metadata, citation_metadata
 from dotenv import load_dotenv
 from conversation_store import ConversationStore, ConversationBusy
 from conversation_context import build_context
@@ -36,7 +41,6 @@ from answers import NoteAnswer, SourceOnlyAnswer
 from context import format_context
 from structured_output import structured_protocols
 from library_store import LibraryStore
-from conversation_title import auto_title
 from outline_store import OutlineStore, OutlineBusy
 from outline_service import (scope_fingerprint, run_outline, public_outline,
                              candidate_context, edit_candidate, enroll_candidate, require_current)
@@ -56,6 +60,7 @@ class Document:
     name: str
     revision: int = 1
     text_override: str | None = None
+    source_override: dict | None = None
 
 
 class DocumentCatalog:
@@ -69,7 +74,8 @@ class DocumentCatalog:
         row = self.library.document_state(doc.document_id)
         if row['removed']:
             raise HTTPException(410, detail='这份资料已移出知识库；旧练习仍保留出题时的版本依据。')
-        return Document(doc.document_id, doc.path, doc.name, row['revision'], row['text_override'])
+        return Document(doc.document_id, doc.path, doc.name, row['revision'], row['text_override'],
+                        json.loads(row['source_json']) if row.get('source_json') else None)
 
     def list(self) -> list[Document]:
         examples = [
@@ -81,7 +87,7 @@ class DocumentCatalog:
             for folder in sorted(self.notes_dir.iterdir()):
                 if not folder.is_dir() or not re.fullmatch(r"[0-9a-f]{32}", folder.name):
                     continue
-                files = list(folder.glob("*.md"))
+                files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in ('.md', '.pdf')]
                 if len(files) == 1 and files[0].is_file():
                     uploads.append(Document(f"upload-{folder.name}", files[0], files[0].name))
         result = []
@@ -97,7 +103,7 @@ class DocumentCatalog:
         match = UPLOAD_ID.fullmatch(document_id)
         if match:
             folder = self.notes_dir / match.group(1)
-            files = list(folder.glob("*.md")) if folder.is_dir() else []
+            files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in ('.md', '.pdf')] if folder.is_dir() else []
             if len(files) == 1 and files[0].is_file():
                 return self.managed(Document(document_id, files[0], files[0].name))
         elif document_id.startswith("example-"):
@@ -109,11 +115,16 @@ class DocumentCatalog:
         raise HTTPException(status_code=404, detail="找不到这份笔记。")
 
     @staticmethod
-    def prepare_import(filename: str, content: bytes) -> tuple[str, str]:
+    def prepare_import(filename: str, content: bytes) -> tuple[str, str | bytes]:
         original = filename.replace("\\", "/").split("/")[-1]
         safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", original).strip(" .")
-        if not safe_name.lower().endswith(".md") or not safe_name or len(safe_name) > 120:
-            raise ValueError("请选择文件名不超过 120 个字符的 Markdown (.md) 文件。")
+        if Path(safe_name).suffix.lower() not in ('.md', '.pdf') or not safe_name or len(safe_name) > 120:
+            raise ValueError("请选择文件名不超过 120 个字符的 Markdown (.md) 或 PDF (.pdf) 文件。")
+        if safe_name.lower().endswith('.pdf'):
+            from pdf_parser import MAX_PDF_BYTES
+            if not content.startswith(b'%PDF-') or len(content) > MAX_PDF_BYTES:
+                raise ValueError('请选择有效且不超过 20 MB 的 PDF。')
+            return safe_name, content
         if len(content) > MAX_UPLOAD_BYTES:
             raise ValueError("单份笔记不能超过 2 MB。")
         try:
@@ -124,12 +135,16 @@ class DocumentCatalog:
             raise ValueError("不能导入空笔记。")
         return safe_name, text
 
-    def import_note(self, safe_name: str, text: str) -> Document:
+    def import_note(self, safe_name: str, text: str | bytes, parsed=None) -> Document:
         folder_id = uuid4().hex
         folder = self.notes_dir / folder_id
         folder.mkdir(parents=True)
         path = folder / safe_name
-        path.write_text(text, encoding="utf-8")
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+            (folder / 'document.json').write_text(json.dumps(parsed.to_dict(), ensure_ascii=False), encoding='utf-8')
+        else:
+            path.write_text(text, encoding="utf-8")
         return Document(f"upload-{folder_id}", path, safe_name)
 
 
@@ -379,6 +394,15 @@ class CorrectionRequest(BaseModel):
 
 
 def _source_for(document: Document) -> Source:
+    if document.path.suffix.lower() == '.pdf':
+        try:
+            data = document.source_override or json.loads((document.path.parent / 'document.json').read_text(encoding='utf-8'))
+            source = source_from_document(document.path, ParsedDocument.from_dict(data))
+            from pdf_parser import raw_path
+            raw_path(source)
+            return source
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(422, detail='PDF 原件或解析快照无法读取，请重新导入。') from exc
     if document.text_override is not None:
         path = document.path.resolve()
         text = document.text_override
@@ -391,7 +415,17 @@ def _source_for(document: Document) -> Source:
 
 def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = None,
                conversation_db: Path | None = None) -> FastAPI:
-    app = FastAPI(title="Knowledge Review", docs_url=None, redoc_url=None)
+    streams = StreamRunner()
+    app = FastAPI(title="Knowledge Review", docs_url=None, redoc_url=None, lifespan=streams.lifespan)
+    app.state.stream_runner = streams
+
+    @app.get("/internal/metrics")
+    def worker_metrics():
+        return streams.snapshot()
+
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok"}
     from retrieval_review_app import review_router
     app.include_router(review_router())
     catalog = DocumentCatalog(notes_dir)
@@ -475,7 +509,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             if memberships.get(doc.document_id, 'root') in allowed:
                 source = _source_for(doc)
                 snapshots.append({'document_id': doc.document_id, 'source_id': source.source_id,
-                                  'path': str(source.path), 'name': doc.name, 'text': source.text})
+                                  'path': str(source.path), 'name': doc.name, 'text': source.text, **snapshot_metadata(source)})
         return snapshots
 
     def outline_action(action):
@@ -502,6 +536,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(action)
 
     @app.post('/api/collections/{identity}/outlines', status_code=202)
+    @streams.detached("outline", resume=False)
     def create_outline(identity: str, payload: OutlineRequest, background: BackgroundTasks):
         def action():
             snapshots = collection_snapshots(identity)
@@ -523,6 +558,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(lambda: public_outline(outlines, identity, collection_snapshots))
 
     @app.post('/api/outlines/{identity}/resume', status_code=202)
+    @streams.detached("outline", resume=True)
     def resume_outline(identity: str, background: BackgroundTasks):
         def action():
             with outlines.lock(identity):
@@ -538,13 +574,14 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
 
     @app.post('/api/outlines/{identity}/pause')
     def pause_outline(identity: str):
-        return outline_action(lambda: (outlines.pause(identity), {'id': identity})[1])
+        return outline_action(lambda: (outlines.pause(identity), streams.cancel_job('outline', identity), {'id': identity})[2])
 
     @app.patch('/api/outline-candidates/{identity}')
     def update_outline_candidate(identity: str, payload: OutlineEditRequest):
         return outline_action(lambda: {'revision': edit_candidate(outlines, identity, payload.learning, payload.revision)})
 
     @app.post('/api/outlines/{identity}/grouping', status_code=202)
+    @streams.detached("grouping", resume=False)
     def group_outline(identity: str, payload: OutlineGroupRequest, background: BackgroundTasks):
         def action():
             from outline_grouping import start_grouping
@@ -559,6 +596,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(action)
 
     @app.post('/api/outline-group-runs/{identity}/retry', status_code=202)
+    @streams.detached("grouping", resume=True)
     def retry_outline_grouping(identity: str, background: BackgroundTasks, payload: OutlineGroupContinueRequest):
         def action():
             from outline_grouping import retry_grouping
@@ -575,6 +613,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             from outline_group_steps import pause_grouping
             get_run(outlines, identity)
             pause_grouping(outlines, identity)
+            streams.cancel_job('grouping', identity)
             return {'id': identity}
         return outline_action(action)
 
@@ -593,6 +632,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(action)
 
     @app.post('/api/outline-groups/{identity}/source-reviews', status_code=202)
+    @streams.detached("review", resume=False)
     def source_review(identity: str, payload: OutlineSourceReviewRequest, background: BackgroundTasks):
         def action():
             from outline_review import start_source_review, run_source_review
@@ -605,6 +645,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(action)
 
     @app.post('/api/outline-source-reviews/{identity}/continue', status_code=202)
+    @streams.detached("review", resume=True)
     def continue_review(identity: str, payload: OutlineGroupContinueRequest, background: BackgroundTasks):
         def action():
             from outline_review import continue_source_review, run_source_review
@@ -616,7 +657,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     @app.post('/api/outline-source-reviews/{identity}/pause')
     def pause_source_review(identity: str):
         from outline_review_store import pause_review
-        return outline_action(lambda: (pause_review(outlines, identity), {'id': identity})[1])
+        return outline_action(lambda: (pause_review(outlines, identity), streams.cancel_job('review', identity), {'id': identity})[2])
 
     @app.post('/api/outline-source-reviews/{identity}/apply')
     def apply_review(identity: str, payload: OutlineSourceReviewApplyRequest):
@@ -625,6 +666,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             collection_snapshots, payload.canonical_id, payload.unit_id)})
 
     @app.post('/api/outlines/{identity}/routes',status_code=202)
+    @streams.detached("route", resume=False)
     def generate_route(identity: str,payload: OutlineRouteRequest,background: BackgroundTasks):
         def action():
             from outline_routes import start_route,run_route
@@ -636,6 +678,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(action)
 
     @app.post('/api/outline-routes/{identity}/continue',status_code=202)
+    @streams.detached("route", resume=True)
     def retry_route(identity: str,payload: OutlineGroupContinueRequest,background: BackgroundTasks):
         def action():
             from outline_routes import continue_route,run_route
@@ -647,7 +690,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     @app.post('/api/outline-routes/{identity}/pause')
     def stop_route(identity: str):
         from outline_route_store import pause_route
-        return outline_action(lambda:(pause_route(outlines,identity),{'id':identity})[1])
+        return outline_action(lambda:(pause_route(outlines,identity),streams.cancel_job('route',identity),{'id':identity})[2])
 
     @app.patch('/api/outline-route-edges/{identity}')
     def review_route_edge(identity: str,payload: OutlineRouteEdgeRequest):
@@ -674,7 +717,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     def read_document(document_id: str):
         doc = catalog.get(document_id)
         source = _source_for(doc)
-        return {
+        result = {
             "id": doc.document_id,
             "name": doc.name,
             "source_id": source.source_id,
@@ -684,6 +727,42 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             "lines": source.text.splitlines(),
             "html": render_markdown(source.text),
         }
+        structure = source.document
+        result.update(format=structure.format, blocks=[b.__dict__ for b in structure.blocks] if structure.format == 'pdf' else [],
+                      page_count=structure.page_count, status=structure.status, issues=list(structure.issues))
+        # Dataclass locations must be serialized explicitly rather than exposing paths.
+        if structure.format == 'pdf':
+            from pdf_vision import vision_status
+            result['vision'] = vision_status()
+            result['blocks'] = structure.to_dict()['blocks']
+            base = f'/api/documents/{document_id}/assets/'
+            result['assets'] = [{**a, 'url': base + a['asset_id'] + '?source_id=' + source.source_id}
+                                for a in structure.to_dict()['assets'] if a['page']]
+            labels = {'garbled_text': '提取文字存在乱码', 'reading_order_needs_review': '多栏阅读顺序需要核对',
+                      'visual_content_needs_review': '页面主要为图片，尚无可靠文字', 'table_structure_needs_review': '表格结构需要核对',
+                      'table_detection_failed': '表格提取未完成', 'docling_failed': '结构解析未完成，已保留基础解析结果',
+                      'vlm_failed': '视觉转写未完成', 'vlm_unresolved': '视觉转写仍有无法辨认的内容',
+                      'vlm_unsupported': '当前模型服务不支持图片，已保留常规解析结果；可单独配置视觉模型',
+                      'vlm_no_reliable_text': '视觉转写没有取得可靠文字', 'vlm_page_budget_exhausted': '已达到本次视觉转写页数上限'}
+            if structure.issues:
+                result['html'] = '<aside class="pdf-quality"><strong>解析提示</strong><ul>' + ''.join(
+                    f'<li>第 {int(i["page"])} 页：{escape(labels.get(i["code"], "内容需要核对"))}</li>'
+                    for i in structure.issues) + '</ul></aside>' + result['html']
+            result['html'] += '<section class="pdf-originals"><h3>原始页面</h3>' + ''.join(
+                f'<details><summary>第 {a["page"]} 页原图</summary><img loading="lazy" alt="第 {a["page"]} 页原图" src="{escape(a["url"])}"></details>'
+                for a in result['assets'] if a['kind'] == 'page') + '</section>'
+        return result
+
+    @app.get('/api/documents/{document_id}/assets/{asset_id}')
+    def read_asset(document_id: str, asset_id: str, source_id: str):
+        source = _source_for(catalog.get(document_id))
+        if source.source_id != source_id:
+            raise HTTPException(409, detail='资源属于旧资料版本，请查看当时的引用快照。')
+        try:
+            from pdf_parser import render_asset
+            return Response(render_asset(source, asset_id), media_type='image/png', headers={'Cache-Control': 'private, no-store'})
+        except (OSError, ValueError) as exc:
+            raise HTTPException(404, detail='当前版本没有这个视觉资源。') from exc
 
     @app.post("/api/documents", status_code=201)
     async def import_documents(files: list[UploadFile] = File(...), collection_id: str = "root"):
@@ -692,14 +771,20 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=400, detail=f"每次最多导入 {MAX_SCOPE} 份笔记。")
         prepared = []
         for file in files:
-            content = await file.read(MAX_UPLOAD_BYTES + 1)
+            from pdf_parser import MAX_PDF_BYTES
+            content = await file.read(MAX_PDF_BYTES + 1)
             try:
-                prepared.append(catalog.prepare_import(file.filename or "", content))
+                safe_name, body = catalog.prepare_import(file.filename or "", content)
+                parsed = None
+                if isinstance(body, bytes):
+                    from pdf_parser import parse_pdf
+                    parsed = await run_in_threadpool(parse_pdf, body, raw_file=safe_name)
+                prepared.append((safe_name, body, parsed))
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
         imported = []
-        for safe_name, text in prepared:
-            doc = catalog.import_note(safe_name, text)
+        for safe_name, text, parsed in prepared:
+            doc = catalog.import_note(safe_name, text, parsed)
             imported.append({"id": doc.document_id, "name": doc.name, "collection_id": collection_id})
         library.assign_documents([doc["id"] for doc in imported], collection_id)
         return imported
@@ -709,12 +794,28 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         doc = catalog.get(identity)
         if not identity.startswith('upload-'):
             raise HTTPException(400, detail='示例文档只供阅读，请导入自己的文件再替换。')
+        if doc.path.suffix.lower() == '.pdf' and _source_for(doc).source_id != expected_source_id:
+            raise HTTPException(409, detail='PDF 版本已变化，请刷新后再替换。')
         try:
-            _, text = catalog.prepare_import(file.filename or '', await file.read(MAX_UPLOAD_BYTES + 1))
+            from pdf_parser import MAX_PDF_BYTES
+            safe_name, text = catalog.prepare_import(file.filename or '', await file.read(MAX_PDF_BYTES + 1))
+            if Path(safe_name).suffix.lower() != doc.path.suffix.lower():
+                raise ValueError('替换文件需保持原资料格式；不同格式请另行导入。')
+            parsed = None
+            if isinstance(text, bytes):
+                from pdf_parser import parse_pdf
+                parsed = await run_in_threadpool(parse_pdf, text, raw_file=safe_name)
+                version_dir = doc.path.parent / 'versions'
+                version_dir.mkdir(exist_ok=True)
+                version = version_dir / (parsed.raw_hash + '.pdf')
+                if not version.exists():
+                    version.write_bytes(text)
+                parsed = replace(parsed, raw_file='versions/' + version.name)
+                text = None
         except ValueError as exc:
             raise HTTPException(400, detail=str(exc)) from exc
         return learning_action(lambda: library.change_document(identity, _source_for(doc), expected_source_id,
-                               expected_revision=doc.revision, text=text))
+                               expected_revision=doc.revision, text=text, document=parsed))
 
     @app.delete('/api/documents/{identity}')
     def remove_document(identity: str, expected_source_id: str):
@@ -723,6 +824,21 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(400, detail='示例文档不能移除。')
         return learning_action(lambda: library.change_document(identity, _source_for(doc), expected_source_id,
                                expected_revision=doc.revision, remove=True))
+
+    @app.post('/api/documents/{identity}/reparse')
+    async def reparse_document(identity: str, expected_source_id: str):
+        doc = catalog.get(identity)
+        source = _source_for(doc)
+        if doc.path.suffix.lower() != '.pdf' or source.source_id != expected_source_id:
+            raise HTTPException(409, detail='仅能重新解析当前版本的 PDF，请先刷新资料。')
+        from pdf_parser import raw_path, parse_pdf
+        data = raw_path(source).read_bytes()
+        try:
+            parsed = await run_in_threadpool(parse_pdf, data, raw_file=source.document.raw_file)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+        return learning_action(lambda: library.change_document(identity, source, expected_source_id,
+                               expected_revision=doc.revision, document=parsed))
 
     def resolve_scope(document_ids, focus_document_id, focus_source_id, line_start, line_end):
         if len(set(document_ids)) != len(document_ids):
@@ -745,7 +861,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=400, detail="选段行号不在原文范围内。")
         return sources, documents_by_id, focus_source
 
-    def generate_answer(payload: AskRequest, conversation_context=None, budget=None, resolved_scope=None, diagnostics=None):
+    def generate_answer(payload: AskRequest, conversation_context=None, budget=None, resolved_scope=None, diagnostics=None, event_sink=None):
         if not payload.question.strip():
             raise HTTPException(status_code=400, detail="请输入问题。")
         sources, documents_by_id, focus_source = resolved_scope or resolve_scope(
@@ -765,6 +881,8 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             if conversation_context is not None:
                 extra["memory_tools"] = ConversationMemory(conversations, conversation_context.memory_dependencies[0]["conversation_id"],
                                                            conversation_context.memory_dependencies)
+            if event_sink is not None:
+                extra["event_sink"] = event_sink
             run = run_agent(sources, payload.question, tools, strict=payload.strict, focus=focus,
                             response_language=payload.response_language,
                             before_request=lambda: guard_documents(list(documents_by_id.values()), sources), **extra)
@@ -795,6 +913,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                     "name": source_by_id[citation.source_id].path.name,
                     "line_start": citation.line_start,
                     "line_end": citation.line_end,
+                    **citation_metadata(source_by_id[citation.source_id], citation),
                     "excerpt": "\n".join(source_by_id[citation.source_id].text.splitlines()[
                         citation.line_start - 1:citation.line_end
                     ]),
@@ -813,6 +932,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return result, run.context_snapshot
 
     @app.post("/api/ask")
+    @streams.bounded
     def ask(payload: AskRequest):
         return generate_answer(payload)[0]
 
@@ -883,10 +1003,10 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 pass  # A live generation is displayed as running; do not reset it.
             turns = conversations.turns(identity, after=after_seq, limit=limit)
             chat = conversations.get_conversation(identity)
-            if chat["title_state"] in ("pending", "generating"):
+            if chat["title_state"] in ("pending", "generating", "failed"):
                 completed = next((turn for turn in turns if turn["status"] == "completed"), None)
                 if completed:
-                    background_tasks.add_task(auto_title, conversations, identity, completed["request"].get("response_language", "zh"))
+                    background_tasks.add_task(streams.title, conversations, identity, completed["request"].get("response_language", "zh"))
             return {"conversation": conversations.get_conversation(identity),
                     "turns": [public_turn(turn) for turn in turns],
                     "next_cursor": turns[-1]["seq"] if len(turns) == limit else None,
@@ -897,14 +1017,17 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     def conversation_summary(identity: str):
         return conversation_action(lambda: conversations.summary(identity))
 
-    def execute_turn(identity, request_id, request_data, retry_language=None, retry_retrieval_mode=None):
+    def execute_turn(identity, request_id, request_data, retry_language=None, retry_retrieval_mode=None, event_sink=None):
         with conversations.generation_lock(identity):
             conversations.recover(identity)
             turn = conversations.begin(identity, request_id, request_data)
+            if event_sink is not None:
+                event_sink("meta", {"request_id": request_id, "turn_id": turn["id"]})
             if turn["status"] == "completed":
                 return public_turn(turn)
             diagnostics = {}
             try:
+                checkpoint()
                 effective = dict(request_data)
                 # Requests stored before mode selection used dense retrieval.
                 effective.setdefault('retrieval_mode', 'dense')
@@ -929,10 +1052,16 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 }
                 background = build_context(conversations, identity, payload.question, payload.response_language, budget,
                                            required_data=required_data)
-                result, snapshot = generate_answer(payload, background, budget, scope, diagnostics)
+                if event_sink is not None:
+                    event_sink("progress", {"phase": "context", "status": "completed"})
+                result, snapshot = generate_answer(payload, background, budget, scope, diagnostics,
+                                                   **({"event_sink": event_sink} if event_sink is not None else {}))
                 snapshot = snapshot or background.snapshot()
                 snapshot['document_dependencies'] = [{'id': d.document_id, 'revision': d.revision} for d in scope[1].values()]
+                checkpoint()
                 conversations.finish(turn["id"], turn["attempt"], result, snapshot or background.snapshot())
+            except GenerationCancelled:
+                conversations.fail(turn["id"], turn["attempt"], "生成已取消，原始输入已保存，可以重试。", diagnostics)
             except HTTPException as exc:
                 conversations.fail(turn["id"], turn["attempt"], str(exc.detail), diagnostics)
             except Exception as failure:
@@ -945,16 +1074,38 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 conversations.fail(turn["id"], turn["attempt"], error, diagnostics)
             return public_turn(conversations.turn(turn["id"]))
 
+    @app.post("/api/conversations/{identity}/turns/stream")
+    async def stream_turn(identity: str, payload: TurnRequest, request: Request):
+        if not payload.question.strip():
+            raise HTTPException(status_code=400, detail="请输入问题。")
+
+        def action(event_sink):
+            # Preflight happens in the worker before meta/HTTP 200. execute_turn
+            # retains its own permission checks and generation lock for races.
+            resolve_scope(payload.document_ids, payload.focus_document_id, payload.focus_source_id,
+                          payload.line_start, payload.line_end)
+            def notify(event, data):
+                if event == "meta":
+                    data = {**data, "trace_id": request.headers.get("X-Request-ID", "")[:128]}
+                event_sink(event, data)
+            return conversation_action(lambda: execute_turn(
+                identity, payload.request_id, payload.model_dump(exclude={"request_id"}), event_sink=notify))
+
+        return await streams.response(action, request=request,
+            after_released=lambda: streams.title(conversations, identity, payload.response_language))
+
     @app.post("/api/conversations/{identity}/turns")
+    @streams.bounded
     def submit_turn(identity: str, payload: TurnRequest, background_tasks: BackgroundTasks):
         if not payload.question.strip():
             raise HTTPException(status_code=400, detail="请输入问题。")
         result = conversation_action(lambda: execute_turn(identity, payload.request_id, payload.model_dump(exclude={"request_id"})))
         if result["status"] == "completed":
-            background_tasks.add_task(auto_title, conversations, identity, payload.response_language)
+            background_tasks.add_task(streams.title, conversations, identity, payload.response_language)
         return result
 
     @app.post("/api/conversations/{identity}/turns/{turn_id}/retry")
+    @streams.bounded
     def retry_turn(identity: str, turn_id: str, payload: RetryTurnRequest, background_tasks: BackgroundTasks):
         def action():
             turn = conversations.turn(turn_id)
@@ -964,7 +1115,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         result = conversation_action(action)
         if result["status"] == "completed":
             language = payload.response_language or conversations.turn(turn_id)["request"].get("response_language", "zh")
-            background_tasks.add_task(auto_title, conversations, identity, language)
+            background_tasks.add_task(streams.title, conversations, identity, language)
         return result
 
     @app.post("/api/conversations/{identity}/turns/{turn_id}/skip")
@@ -1020,6 +1171,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/practice", status_code=201)
+    @streams.bounded
     def create_practice(payload: PracticeStartRequest):
         load_dotenv(ROOT / ".env")
         sources, documents_by_id, focus_source = resolve_scope(
@@ -1047,6 +1199,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=502, detail="出题未完成，请检查终端中的模型配置或错误信息。")
 
     @app.post("/api/practice/{session_id}/answers")
+    @streams.bounded
     def submit_practice_answer(session_id: str, payload: PracticeAnswerRequest):
         try:
             practice_store.submit_answer(session_id, payload.answer,
@@ -1062,6 +1215,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=502, detail="回答已保存，评分未完成。请在练习记录中重试评分。")
 
     @app.post("/api/practice/{session_id}/grade")
+    @streams.bounded
     def retry_practice_grade(session_id: str, payload: PracticeGradeRequest | None = None):
         try:
             return grade_pending_answer(practice_store, session_id,
@@ -1122,6 +1276,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return learning_action(action)
 
     @app.post("/api/learning/{item_id}/review")
+    @streams.bounded
     def review(item_id: str, payload: ReviewRequest):
         return learning_action(lambda: start_review(practice_store, item_id,
             mode=payload.mode, response_language=payload.response_language))

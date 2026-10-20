@@ -2,6 +2,7 @@
 
 import json
 import unittest
+from test_agent_governance import wait_for
 from contextlib import closing
 from unittest.mock import patch
 
@@ -289,6 +290,7 @@ class OutlineGroupTests(unittest.TestCase):
         fixture_id = self.create(collection=collection)
         with patch('outline_service._request_structured', side_effect=fake_model):
             fixtures.run_outline(self.store, fixture_id, self.current)
+        app = create_app(self.root / 'uploads', self.practice.path)
         with TestClient(app) as client:
             ids = [c['id'] for c in self.store.get(fixture_id)['candidates'][:2]]
             result = GroupDraft(suggestions=[GroupProposal(kind='same_knowledge', candidate_ids=ids,
@@ -298,6 +300,7 @@ class OutlineGroupTests(unittest.TestCase):
                 response = client.post(f'/api/outlines/{fixture_id}/grouping', json=payload)
                 self.assertEqual(response.status_code, 202, response.text)
                 self.assertEqual(client.post(f'/api/outlines/{fixture_id}/grouping', json=payload).json(), response.json())
+                wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
             job = client.get(f'/api/outlines/{fixture_id}').json()
             group = job['grouping']['suggestions'][0]
             payload = {k: group['proposal'][k] for k in ('name', 'reason', 'canonical_id')}

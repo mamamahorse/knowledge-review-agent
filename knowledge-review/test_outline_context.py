@@ -152,7 +152,8 @@ class OutlineContextTests(unittest.TestCase):
         self.assertEqual(model.call_count, 1)
         job = self.store.get(identity)
         self.assertEqual(job['status'], 'paused')
-        self.assertEqual(job['context_steps'][0]['status'], 'completed')
+        self.assertEqual(job['context_steps'][0]['status'], 'failed')
+        self.assertIsNone(job['context_steps'][0]['result'])
         self.store.resume(identity)
         with patch('outline_service._request_structured', side_effect=controlled):
             run_outline(self.store, identity, self.current)

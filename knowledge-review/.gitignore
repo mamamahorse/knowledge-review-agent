@@ -37,3 +37,6 @@ Thumbs.db
 *.key
 *.p12
 *.pfx
+
+# CLI PDF parse snapshots can contain private source text.
+.parsed/

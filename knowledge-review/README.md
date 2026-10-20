@@ -1,5 +1,21 @@
 # Knowledge Review
 
+2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
+
+
+2026-10-16：新增最小 Gateway SSE 适配，复用原 execute_turn/run_agent 和 SQLite 提交流程；GET /healthz 不调用模型，POST /api/conversations/{identity}/turns/stream 提供真实执行进度和保存后的最终结果。原 JSON API 保持。SSE 每进程最多4个实际同步工作，客户端断连不提前释放槽位；不是逐 token 或完整业务取消。12项新增、80项相关原有测试和10项可控 HTTP 链路检查通过，无外部模型调用，不代表模型质量或原项目全量回归。详细调用链、原因、运行方法和边界见 docs/gateway-sse.md。容器最终验证见独立 Gateway 仓库的 README/evidence，本项目不包含 C++ 实现；无自动提交/推送。
+
+
+2026-10-15 PDF 第一版：网页与 CLI 可读取 Markdown/PDF，两者使用统一文档结构；PDF 支持文本与表格提取、页码/区域定位、原始页面查看、替换和重新解析。长表格检索子块补回真实表头，模型预算保留结构；旧问答和题目继续绑定旧快照。设计、模块原因、配置和已知边界见 [PDF 与统一文档设计](docs/pdf-document-design.md)。
+
+基础 `requirements.txt` 已包含 PyMuPDF；已有环境可单独运行 `.\.venv\Scripts\python.exe -m pip install -r requirements-pdf.txt`。网页仍用原来的启动方式，导入按钮现在接受 `.md` 与 `.pdf`；CLI 例：`.\.venv\Scripts\python.exe main.py .\your-document.pdf --chunks`。普通 PDF 解析不调用云端模型。
+
+视觉请求默认复用原先的 `LLM_MODEL/LLM_API_KEY/LLM_BASE_URL`；用户可用 `VLM_MODEL/VLM_API_KEY/VLM_BASE_URL` 分别覆盖，留空仍回退到聊天配置。程序不按模型名硬编码图片能力：首次真实请求成功后记录支持，服务明确拒绝图片时保留普通解析、停止该连接的重复图片请求；超时、鉴权、额度或结构化协议错误不会误记为“不支持图片”。修改连接配置后重启应用。
+
+问答 Agent 可按需查看页面或区域；另设 `PDF_VLM_ENABLED=1` 才在导入/重新解析时对最多 3 个异常页进行视觉转写。已用本机原有 `deepseek-flash` 完成合成图片读取及“Agent 看图→最终回答→视觉引用”的真实验证，不能据此推断复杂 PDF 的全面准确率。基础解析默认 `PDF_PARSER=pymupdf`；可选 Docling 依赖、模型目录及未验收范围见设计文档，普通请求不隐式下载模型。
+
+表格窗口还会补入有位置关系的邻近表题、单位与脚注原文。新增 `read_table` 按完整数据行读取，明确返回已提取总行数、本次范围和是否覆盖整张已提取表；完整覆盖提取结果仍不等于证明原 PDF 没有漏提。
+
 2026-10-15 Git交付范围：源码、测试、文档及公开合成评测输入纳入版本管理；个人笔记/聊天/学习数据库、密钥、模型和运行缓存保留本机。具体排除原因及克隆恢复边界见 [Git管理说明](docs/git-management.md)。可直接查看版本化的 [100条A/B/C结果摘要](evals/retrieval/expanded-v1/results-20261013.md)，含C的多证据退化与实验限制；这是2026-10-13报告的副本，不是本次重新测得。
 
 2026-10-13：网页问答已接入 **B融合查找**，在“资料查找”可切回原语义查找，偏好刷新保留。Agent仍按需搜索，零调用不建索引；权限、原文引用、预算和学习功能保留。100条正式工具排名与原B全部一致，真实公开网页样例可运行；C仍仅离线。后续评测由Agent自主判定和冻结、记录争议/排除理由，原人工决定与旧实验保留。运行、代码原因、冷/暖耗时与真实失败记录见 [正式融合查找](docs/production-hybrid-search.md)。下文正式保持A是此前接入决策，已由本轮开发推进；旧API及CLI默认A仍用于兼容与基线。
@@ -730,3 +746,13 @@ SQLite 保存归档状态、来源版本、历史向量与轮次来源依赖。�
 详细数据流、代码选择、接口与限制见 [第二、三批实现](docs/library-and-chat-practice.md)、[核心代码导读](docs/core-code-walkthrough.md) 和 [开发记录](docs/development-log.md)。专项测试：`.venv\Scripts\python.exe -m unittest test_management_chat_practice -v`；受控评测：`.venv\Scripts\python.exe quality_chat_practice.py --mode smoke`；显式 `--mode live --output-tokens 8192` 才请求当前真实模型，使用独立合成数据库、不自动加入计划。
 
 验证：315 项全量测试通过；最新接口调整后 72 项相关回归通过。最新 smoke 完成，真实模型一个合成 TCP 讨论样例生成了 LEN=30 的计算/解释题及合法原话引用，未自动创建计划，删除合成来源后依据撤销；此前三次失败报告保留，不计算语义质量率。隔离页面验证讨论题审核/主动加入、集合移动、正文替换和刷新恢复，无页面脚本错误。多题批量审核、题目编辑、全局画像、纠正关系、物理文件清除/恢复及版本浏览仍后续。
+
+
+2026-10-19 M2.3.2：网关已接入的JSON/SSE支持请求范围内的模型HTTP取消。复用原同步业务函数，agent_cancel.py以协作式标志和异步httpx传输关闭模型I/O；execute_turn沿用failed保存取消说明，完成后再释放实际工作槽。已提交结果不回滚；CPU/文件/SQLite/DNS阻塞不强杀，供应商远端计算是否停止未经验证。范围内SDK自动重试关闭；范围外CLI和后台任务仍用原传输。后台202/独立标题治理、Python实际任务指标、完整真实embedding/RAG部署仍未完成。调用链、取消边界和复现见docs/gateway-sse.md及独立Gateway仓库docs/CANCELLATION.md；测试结果以Gateway对应日期evidence为准，无自动提交/推送。
+
+
+2026-10-20 M2.3.3：8个清单/归组/来源核查/路线的后台提交与继续入口，和自动标题，接入原共享模型工作池。先预留槽再创建记录，202返回不释放实际名额；提交者断连/Gateway重启不取消已接受工作。原pause入口先使attempt失效再请求取消模型HTTP，真实Future结束（含连接清理）才释放。嵌套自动核查复用父工作槽与Token；已完成结果保留，原暂停/继续/幂等契约及SQLite结构不变。
+
+标题最多1个；workers>1时至少保留一个未占槽，单worker只在空闲启动且不抢占。忙时跳过无等待队列，失败用已有title_started_at冷却30秒。增加内部GET /internal/metrics，只在进程内聚合request/background/title；Gateway通过受Key保护的GET /agent-metrics固定代理读取。/metrics仍是Gateway本地请求观察，两者不能混同。Agent端口不要直接对不可信网络开放。
+
+相关回归255项（含新增治理16项）、普通/ASan同批103项、真实受控链路与容器各同12组治理检查通过；工具/源码同步最终状态以独立Gateway的evidence/m233-verification-20261020.json为准。原Python不是全量discover，本轮没有外部模型/回答质量/embedding-RAG验收。进程重启计数重置，中断工作沿用原恢复后显式继续，不自动重放。CPU/文件/SQLite/DNS等阻塞不强杀，供应商远端停算未验证，分布式并发/V3仍未实现。详细改动理由、字段、接口和命令见Gateway仓库docs/JOB_GOVERNANCE.md；继续维护其docs/DEVELOPMENT_LOG.md。未自动提交或推送。

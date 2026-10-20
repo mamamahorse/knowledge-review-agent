@@ -5,7 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 from time import perf_counter
 
-from chunking import Chunk, chunk_source, section_label
+from chunking import Chunk, chunk_source, section_label, with_table_context, block_chunk, protect_selection
 from embedding_config import EmbeddingConfig
 from embeddings import LocalEmbedder
 from retrieval import SearchHit, rank_chunks
@@ -15,6 +15,18 @@ from hybrid_retrieval import BM25Index, HybridConfig, reciprocal_rank_fusion
 
 MAX_SEARCH_RESULTS = 10
 MAX_READ_LINES = 200
+
+
+def structure_metadata(source, chunk):
+    if source.document is None:
+        return {}
+    blocks = [b for b in source.document.blocks if b.line_start <= chunk.line_end and b.line_end >= chunk.line_start]
+    if chunk.kind == 'text' and source.document.format != 'pdf':
+        return {}
+    return {'content_type': chunk.kind, 'parent_blocks': [
+        {'block_id': b.block_id, 'kind': b.kind, 'line_start': b.line_start, 'line_end': b.line_end,
+         'asset_ids': list(b.asset_ids)} for b in blocks],
+        'locations': source.document.locations(chunk.line_start, chunk.line_end)}
 
 
 @dataclass(frozen=True)
@@ -31,6 +43,7 @@ class SearchResult:
 
     def as_dict(self, sources: list[Source]) -> dict:
         paths = {source.source_id: source.path.name for source in sources}
+        by_id = {source.source_id: source for source in sources}
         return {
             "hits": [{
                 "score": hit.score,
@@ -41,6 +54,7 @@ class SearchResult:
                 "line_start": hit.chunk.line_start,
                 "line_end": hit.chunk.line_end,
                 "text": hit.chunk.text,
+                **structure_metadata(by_id[hit.chunk.source_id], hit.chunk),
                 **({'branches':self.branches.get(hit.chunk.chunk_id,{})} if self.branches is not None else {}),
             } for hit in self.hits],
             "retrieval_mode": self.retrieval_mode,
@@ -61,6 +75,7 @@ class ReadResult:
             "line_start": self.chunk.line_start,
             "line_end": self.chunk.line_end,
             "text": self.chunk.text,
+            **structure_metadata(self.source, self.chunk),
         }
 
 
@@ -68,6 +83,7 @@ class ReadResult:
 class ToolExecution:
     output: dict
     visible_chunks: tuple[Chunk, ...]
+    visual_observation: dict | None = None
 
 
 class KnowledgeTools:
@@ -228,18 +244,65 @@ class KnowledgeTools:
             if unexpected or "query" not in arguments:
                 raise ValueError("search_notes accepts only query and optional top_k.")
             result = self.search_notes(arguments["query"], arguments.get("top_k", 3))
-            return ToolExecution(result.as_dict(self.sources), tuple(hit.chunk for hit in result.hits))
+            chunks = with_table_context([hit.chunk for hit in result.hits], self.sources)
+            output = result.as_dict(self.sources)
+            if any(c.context_ranges for c in chunks):
+                from context import format_context
+                output['supporting_context'] = format_context(chunks, self.sources)
+            return ToolExecution(output, tuple(chunks))
         if name == "read_source":
             if set(arguments) != {"source_id", "line_start", "line_end"}:
                 raise ValueError("read_source requires source_id, line_start, and line_end.")
             result = self.read_source(**arguments)
-            return ToolExecution(result.as_dict(), (result.chunk,))
+            # An explicit read may start in a table; return its actual header as well.
+            chunks = protect_selection(result.chunk, result.source)
+            output = result.as_dict()
+            if len(chunks) > 1:
+                from context import format_context
+                output['supporting_context'] = format_context(chunks[:-1], self.sources)
+            return ToolExecution(output, tuple(chunks))
+        if name == 'read_table':
+            if set(arguments) != {'source_id', 'block_id', 'row_start', 'row_end'}:
+                raise ValueError('read_table requires source_id, block_id, row_start, and row_end.')
+            source = next((s for s in self.sources if s.source_id == arguments['source_id']), None)
+            block = next((b for b in source.document.blocks if b.block_id == arguments['block_id'] and b.kind == 'table'), None) if source and source.document else None
+            if block is None:
+                raise ValueError('表格不属于本次许可的资料版本。')
+            from table_reading import table_rows
+            headers, rows = table_rows(source, block)
+            start, end = arguments['row_start'], arguments['row_end']
+            if type(start) is not int or type(end) is not int or not 1 <= start <= end <= len(rows):
+                raise ValueError('表格数据行范围无效，行号不包含表头。')
+            if end - start + 1 > MAX_READ_LINES:
+                raise ValueError(f'每次最多读取 {MAX_READ_LINES} 个完整数据行。')
+            selected = rows[start - 1:end]
+            result = self.read_source(source.source_id, selected[0]['line_start'], selected[-1]['line_end'])
+            chunks = protect_selection(result.chunk, source)
+            from context import format_context
+            output = {**result.as_dict(), 'block_id': block.block_id, 'headers': headers,
+                      'rows': selected, 'row_start': start, 'row_end': end, 'total_extracted_rows': len(rows),
+                      'complete_extracted_table': start == 1 and end == len(rows),
+                      'supporting_context': format_context(chunks[:-1], self.sources),
+                      'notice': 'Coverage describes this extracted table only, not proof that PDF extraction is complete. Partial rows cannot establish a global maximum, total or trend.'}
+            return ToolExecution(output, tuple(chunks))
+        if name == 'inspect_visual':
+            if set(arguments) != {'source_id', 'asset_id', 'question'}:
+                raise ValueError('inspect_visual requires source_id, asset_id, and question.')
+            from pdf_vision import inspect_visual
+            source = next((s for s in self.sources if s.source_id == arguments['source_id']), None)
+            if source is None:
+                raise ValueError('只能查看本次许可的当前资料版本。')
+            try:
+                observation, block = inspect_visual(source, arguments['asset_id'], arguments['question'])
+            except (RuntimeError, OSError) as exc:
+                raise ValueError(f'视觉查看未完成（{type(exc).__name__}），请保留证据缺口。') from exc
+            return ToolExecution(observation, (block_chunk(source, block),), observation)
         raise ValueError(f"Unknown knowledge tool: {name}")
 
 
-def knowledge_tool_definitions() -> list[dict]:
+def knowledge_tool_definitions(*, include_visual=False, include_tables=False) -> list[dict]:
     """Provider-neutral JSON schemas; the Agent transport will wrap them later."""
-    return [
+    definitions = [
         {
             "name": "search_notes",
             "description": "Search the currently loaded notes for relevant meaning and terms. Scores rank candidates and do not prove relevance.",
@@ -266,3 +329,19 @@ def knowledge_tool_definitions() -> list[dict]:
             },
         },
     ]
+    if include_tables:
+        definitions.append({'name': 'read_table',
+            'description': 'Read complete data rows from a known table block_id, repeating its original header and nearby notes. Data row indices start at 1 and exclude headers. Check total_extracted_rows and complete_extracted_table before global comparisons.',
+            'parameters': {'type': 'object', 'additionalProperties': False,
+                'properties': {'source_id': {'type': 'string'}, 'block_id': {'type': 'string'},
+                               'row_start': {'type': 'integer', 'minimum': 1},
+                               'row_end': {'type': 'integer', 'minimum': 1}},
+                'required': ['source_id', 'block_id', 'row_start', 'row_end']}})
+    if include_visual:
+        definitions.append({'name': 'inspect_visual',
+            'description': 'Inspect a loaded PDF page or figure using its asset_id (page-N for a physical page). Use this for visual evidence; table-wide numeric conclusions require complete data.',
+            'parameters': {'type': 'object', 'additionalProperties': False,
+                'properties': {'source_id': {'type': 'string'}, 'asset_id': {'type': 'string'},
+                               'question': {'type': 'string', 'maxLength': 2000}},
+                'required': ['source_id', 'asset_id', 'question']}})
+    return definitions

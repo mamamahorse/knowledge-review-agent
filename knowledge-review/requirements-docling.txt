@@ -1,0 +1,3 @@
+# Optional structured parser. Provision its model artifacts explicitly first.
+-r requirements-pdf.txt
+docling>=2.0,<3.0

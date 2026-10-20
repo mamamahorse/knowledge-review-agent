@@ -149,8 +149,9 @@ def start(store, conversations, identity, request_id, payload, *, sources=(), do
             for ref in references:
                 ref['practice_reason'] = generated.reason
             guard()
+            from document_model import snapshot_metadata
             snapshots = [{'document_id': document_ids[s.source_id], 'source_id': s.source_id,
-                          'path': str(s.path), 'name': s.path.name, 'text': s.text} for s in sources] if strict else []
+                          'path': str(s.path), 'name': s.path.name, 'text': s.text, **snapshot_metadata(s)} for s in sources] if strict else []
             ranges = [{'source_id': c.source_id, 'line_start': c.line_start, 'line_end': c.line_end} for c in visible]
             basis = {'kind': 'document_with_discussion' if strict else 'discussion_model',
                      'dependencies': dependencies, 'references': references}

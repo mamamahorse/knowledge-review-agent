@@ -17,7 +17,8 @@ MODEL_CACHE = Path(__file__).resolve().parent / ".models"
 def passage_text(chunk: Chunk, prefix: str) -> str:
     # Metadata adds context for small chunks without changing their source text.
     heading = section_label(chunk) if any(chunk.section_paths or (chunk.heading_path,)) else ""
-    return f"{prefix}{heading}\n{chunk.text}" if heading else f"{prefix}{chunk.text}"
+    context = '\n'.join(x for x in (heading, chunk.retrieval_context) if x)
+    return f"{prefix}{context}\n{chunk.text}" if context else f"{prefix}{chunk.text}"
 
 
 class LocalEmbedder:
@@ -107,13 +108,20 @@ class LocalEmbedder:
                 def part(end):
                     first, last = chunk.line_start + start, chunk.line_start + end - 1
                     identity = f"{chunk.chunk_id}:token-lines-v1:{first}:{last}"
-                    return replace(chunk, chunk_id=sha256(identity.encode()).hexdigest(),
+                    context_ranges = chunk.context_ranges
+                    if chunk.kind == 'table':
+                        header_start, header_end = chunk.table_header_range or (chunk.line_start, min(chunk.line_start + 1, chunk.line_end))
+                        if not (first <= header_start and last >= header_end):
+                            context_ranges = tuple(dict.fromkeys((*context_ranges, (header_start, header_end))))
+                    return replace(chunk, chunk_id=sha256((identity + (':table-v1' if chunk.kind == 'table' else '')).encode()).hexdigest(),
                                    line_start=first, line_end=last,
-                                   text="\n".join(lines[start:end]))
+                                   text="\n".join(lines[start:end]), context_ranges=context_ranges)
 
                 # A single long line is kept intact for honest line-based citations.
                 # Its embedding uses complete text windows rather than truncation.
                 end = start + 1
+                if chunk.kind == 'table' and start == 0:
+                    end = min(3, len(lines))
                 low, high = end, len(lines)
                 while low <= high:
                     mid = (low + high) // 2

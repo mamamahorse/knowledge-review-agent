@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
+from agent_cancel import model_http_options
 from openai import APIError, ContentFilterFinishReasonError, LengthFinishReasonError, OpenAI
 from pydantic import ValidationError
 
@@ -48,6 +49,7 @@ def answer_question(
     required_chunks: list[Chunk] | None = None,
     memory_tools=None, memory_references: list | None = None, before_request=None,
     completed_actions: list[dict] | None = None,
+    visual_observations: list[dict] | None = None,
 ) -> NoteAnswer:
     if not question.strip():
         raise ValueError("The question must not be blank.")
@@ -64,6 +66,8 @@ def answer_question(
         return shared.prompt() if shared else ""
 
     def make_messages(material):
+        if visual_observations:
+            material += '\n\nAttributed visual interpretations (model observations, not verbatim transcription). Cite their source_id, asset_id and supplied line range for visual claims:\n' + json.dumps(visual_observations, ensure_ascii=False)
         return [
             {"role": "system", "content": (
                 "Help the learner understand the technical question, its mechanism and relevant "
@@ -121,7 +125,7 @@ def answer_question(
         budget_trace.append({"phase": "final", "requests": diagnostics,
                              "visible_ranges": [[c.source_id, c.line_start, c.line_end] for c in chunks or []]})
     try:
-        with OpenAI(**client_options) as client:
+        with OpenAI(**{**client_options, **model_http_options()}) as client:
             if memory_tools:
                 memory_tools.guard()
             def guard():
@@ -141,7 +145,7 @@ def answer_question(
         raise RuntimeError("the model response was truncated; try a narrower question.") from exc
     except ContentFilterFinishReasonError as exc:
         raise RuntimeError("the model response was blocked by the service's content filter.") from exc
-    validate_answer(result, sources, strict=strict, chunks=chunks)
+    validate_answer(result, sources, strict=strict, chunks=chunks, visual_evidence=visual_observations)
     if memory_tools:
         refs = memory_tools.validate_references(getattr(generated, "history_references", []), len(result.blocks))
         if memory_references is not None:

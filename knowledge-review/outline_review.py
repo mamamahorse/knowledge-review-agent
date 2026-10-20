@@ -1,4 +1,5 @@
 """Finite source investigation after grouping; conclusions remain opt-in decisions."""
+from agent_work import job_boundary
 import json
 from contextlib import closing
 from uuid import uuid4
@@ -91,6 +92,7 @@ def evidence_and_observations(review, by_id, saved):
     return evidence, observations
 
 
+@job_boundary("review")
 def run_source_review(store, identity, current):
     attempt = None
     step = None

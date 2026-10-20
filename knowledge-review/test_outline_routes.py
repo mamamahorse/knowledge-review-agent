@@ -1,6 +1,7 @@
 """Controlled interface/lifecycle tests, not real model semantic evaluation."""
 import json
 import unittest
+from test_agent_governance import wait_for
 from contextlib import closing
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -297,6 +298,7 @@ class RouteTests(unittest.TestCase):
             response=client.post(f'/api/outlines/{job}/routes',json=payload);self.assertEqual(response.status_code,202)
             key=response.json()['id']
             self.assertEqual(client.post(f'/api/outlines/{job}/routes',json=payload).json()['id'],key)
+            wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
             r=client.get(f'/api/outlines/{job}').json()['routes']['runs'][0];self.assertEqual(r['status'],'completed')
             e=r['edges'][0]
             self.assertEqual(client.patch(f"/api/outline-route-edges/{e['id']}",json={**{k:e['decision'][k] for k in ('before_id','after_id','kind','reason')},'decision':'accepted','revision':1}).status_code,200)

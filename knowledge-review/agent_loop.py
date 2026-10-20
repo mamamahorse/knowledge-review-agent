@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
+from agent_cancel import model_http_options, checkpoint
 from openai import APIError, OpenAI
 
 from answers import NoteAnswer
-from chunking import Chunk
+from chunking import Chunk, protect_selection
 from context import format_context
 from knowledge_tools import KnowledgeTools, MAX_READ_LINES, knowledge_tool_definitions
 from model_client import answer_question, model_settings
@@ -47,6 +48,7 @@ class FocusSelection:
     chunk: Chunk
     line_start: int
     line_end: int
+    support_chunks: tuple[Chunk, ...] = ()
 
 
 def focus_on_lines(
@@ -62,7 +64,8 @@ def focus_on_lines(
     before = min(context_lines, line_start - 1, room // 2)
     after = min(context_lines, total - line_end, room - before)
     context = tools.read_source(source_id, line_start - before, line_end + after)
-    return FocusSelection(context.chunk, line_start, line_end)
+    protected = protect_selection(context.chunk, context.source)
+    return FocusSelection(protected[-1], line_start, line_end, tuple(protected[:-1]))
 
 
 def document_focus(source: Source, line_start: int, line_end: int) -> FocusSelection:
@@ -74,7 +77,8 @@ def document_focus(source: Source, line_start: int, line_end: int) -> FocusSelec
     identity = f"{source.source_id}:web-focus-v1:{start}:{end}"
     chunk = Chunk(sha256(identity.encode()).hexdigest(), source.source_id, (),
                   start, end, "\n".join(lines[start - 1:end]))
-    return FocusSelection(chunk, line_start, line_end)
+    protected = protect_selection(chunk, source)
+    return FocusSelection(protected[-1], line_start, line_end, tuple(protected[:-1]))
 
 
 def run_agent(
@@ -83,7 +87,7 @@ def run_agent(
     focus: FocusSelection | None = None,
     response_language: ResponseLanguage | None = None,
     conversation_context: "ContextBundle | None" = None, budget: GenerationBudget | None = None,
-    memory_tools=None, before_request=None,
+    memory_tools=None, before_request=None, event_sink=None,
 ) -> AgentRun:
     """Let the model select tools; let the program execute and validate them."""
     if not question.strip():
@@ -95,7 +99,7 @@ def run_agent(
 
     focus_prompt = ""
     if focus is not None:
-        focus_context = format_context([focus.chunk], sources)
+        focus_context = format_context([*focus.support_chunks, focus.chunk], sources)
         if not focus.chunk.line_start <= focus.line_start <= focus.line_end <= focus.chunk.line_end:
             raise ValueError("The selected lines must be inside the visible focus context.")
         focus_prompt = (
@@ -116,7 +120,9 @@ def run_agent(
             conversation_context = memory_tools.bind(conversation_context)
     background = conversation_context.prompt() if conversation_context else ""
     catalog = "\n".join(
-        f"- {source.path.name} | source_id={source.source_id} | {len(source.text.splitlines())} lines"
+        f"- {source.path.name} | source_id={source.source_id} | {len(source.text.splitlines())} lines" + (
+            f" | PDF {source.document.page_count} physical pages; page assets: page-1 through page-{source.document.page_count}; parsing status={source.document.status}"
+            if source.document and source.document.format == 'pdf' else '')
         for source in sources
     )
     messages = [
@@ -137,26 +143,37 @@ def run_agent(
         )},
         {"role": "user", "content": f"Question: {question}\n\nLoaded sources:\n{catalog}{focus_prompt}{background}"},
     ] + preferences
+    from pdf_vision import enabled as vision_enabled, vision_status
+    include_visual = any(s.document and s.document.format == 'pdf' for s in sources) and vision_enabled()
+    include_tables = any(s.document and any(b.kind == 'table' for b in s.document.blocks) for s in sources)
+    if any(s.document and s.document.format == 'pdf' for s in sources):
+        status = vision_status()
+        messages[1]['content'] += '\nVisual service status: ' + status['state'] + '. ' + status['message']
     definitions = [
         {"type": "function", "function": definition}
-        for definition in knowledge_tool_definitions() + (memory_tool_definitions() if memory_tools else [])
+        for definition in knowledge_tool_definitions(include_visual=include_visual, include_tables=include_tables) + (memory_tool_definitions() if memory_tools else [])
     ]
     steps: list[AgentStep] = []
     visible: dict[tuple[str, int, int], Chunk] = {}
     if focus is not None:
-        chunk = focus.chunk
-        visible[(chunk.source_id, chunk.line_start, chunk.line_end)] = chunk
+        for chunk in [*focus.support_chunks, focus.chunk]:
+            visible[(chunk.source_id, chunk.line_start, chunk.line_end)] = chunk
     stop_reason = "tool_budget"
     budget_trace = []
+    visual_observations = []
+    visual_chunks = []
     protocol = {"model": model, "tools": definitions, "tool_choice": "auto", "max_tokens": budget.output_tokens}
     try:
-        with OpenAI(**client_options) as client:
+        with OpenAI(**{**client_options, **model_http_options()}) as client:
             while len(steps) < max_tool_calls:
+                checkpoint()
                 if memory_tools:
                     memory_tools.guard()
                 if before_request:
                     before_request()
                 budget_trace.append({"phase": "agent", **budget.check(messages, **protocol)})
+                if event_sink is not None:
+                    event_sink("progress", {"phase": "agent_model", "status": "started"})
                 response = client.chat.completions.create(
                     model=model, messages=messages, tools=definitions, tool_choice="auto",
                     max_tokens=budget.output_tokens,
@@ -178,7 +195,10 @@ def run_agent(
                     "tool_calls": [call.model_dump(exclude_none=True) for call in calls],
                 })
                 for call in calls:
+                    checkpoint()
                     arguments = None
+                    if event_sink is not None:
+                        event_sink("progress", {"phase": "tool", "tool": call.function.name, "status": "started"})
                     try:
                         if len(steps) >= max_tool_calls:
                             raise ValueError("Tool-call budget exhausted.")
@@ -200,6 +220,8 @@ def run_agent(
                             execution = tools.execute(call.function.name, arguments)
                             output = execution.output
                             returned = list(execution.visible_chunks)
+                            if execution.visual_observation is not None and not budget.fits(messages + [tool_message(output)], **protocol):
+                                raise ValueError('视觉观察超出本轮预算，未授予视觉引用资格。')
                         if not budget.fits(messages + [tool_message(output)], **protocol):
                             def limited_output(candidate):
                                 return {"passages": format_context(candidate, sources),
@@ -213,10 +235,16 @@ def run_agent(
                                 [c.source_id,c.line_start,c.line_end] for c in returned]
                         for chunk in returned:
                             visible[(chunk.source_id, chunk.line_start, chunk.line_end)] = chunk
+                        if call.function.name == 'inspect_visual' and execution.visual_observation is not None:
+                            visual_observations.append(execution.visual_observation)
+                            visual_chunks.extend(returned)
                         error = None
                     except (ValueError, TypeError) as exc:
                         error = str(exc)
                         output = {"error": error}
+                    if event_sink is not None:
+                        event_sink("progress", {"phase": "tool", "tool": call.function.name,
+                                                "status": "failed" if error else "completed"})
                     if len(steps) < max_tool_calls:
                         steps.append(AgentStep(call.function.name, arguments, error))
                     messages.append({
@@ -228,6 +256,7 @@ def run_agent(
 
     # The final request receives only source text actually returned by successful tools.
     # Existing structured-output and citation validation remain the single answer path.
+    checkpoint()
     history_references = []
     chunks = list(visible.values())
     final_question = question
@@ -237,10 +266,13 @@ def run_agent(
             f"L{focus.line_start}-L{focus.line_end}. Explain the selection first; "
             "use surrounding visible lines for context."
         )
+    if event_sink is not None:
+        event_sink("progress", {"phase": "final_model", "status": "started"})
     answer = answer_question(sources, final_question, strict=strict, chunks=chunks,
                              response_language=response_language, conversation_context=conversation_context,
                              budget=budget, budget_trace=budget_trace,
-                             required_chunks=[focus.chunk] if focus else [],
+                             required_chunks=([*focus.support_chunks, focus.chunk] if focus else []) + visual_chunks,
+                             **({'visual_observations': visual_observations} if visual_observations else {}),
                              completed_actions=[{'name':s.name,'status':'failed' if s.error is not None else 'ok'} for s in steps],
                              **({'before_request': before_request} if before_request else {}),
                              **({"memory_tools": memory_tools, "memory_references": history_references}
@@ -250,4 +282,6 @@ def run_agent(
     snapshot = conversation_context.snapshot() if conversation_context else {}
     snapshot["generation_requests"] = budget_trace
     snapshot['retrieval'] = {'mode':tools.retrieval_mode,'searches':tools.retrieval_trace}
+    if visual_observations:
+        snapshot['visual_observations'] = visual_observations
     return AgentRun(answer, tuple(steps), stop_reason, tuple(chunks), snapshot, tuple(history_references))

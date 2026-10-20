@@ -2,6 +2,7 @@
 
 from contextlib import closing
 from uuid import uuid4
+import json
 
 ROOT_COLLECTION = "root"
 
@@ -22,6 +23,9 @@ def initialize_library(conn):
             document_id TEXT NOT NULL, source_id TEXT NOT NULL, text TEXT NOT NULL,
             PRIMARY KEY(document_id,source_id));
     """)
+    for table, column in (('document_states', 'source_json'), ('document_versions', 'snapshot_json')):
+        if column not in {r['name'] for r in conn.execute(f'PRAGMA table_info({table})')}:
+            conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} TEXT')
     for table in ("practice_sessions", "review_items"):
         columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
         if "collection_id" not in columns:
@@ -143,15 +147,17 @@ class LibraryStore:
             db.execute('INSERT OR IGNORE INTO document_states(document_id) VALUES (?)', (identity,))
             return dict(db.execute('SELECT * FROM document_states WHERE document_id=?', (identity,)).fetchone())
 
-    def change_document(self, identity, old_source, expected_source_id, *, expected_revision, text=None, remove=False):
+    def change_document(self, identity, old_source, expected_source_id, *, expected_revision, text=None, remove=False, document=None):
         if old_source.source_id != expected_source_id:
             raise ValueError('资料版本已变化，请刷新后再操作。')
         with self.store.transaction() as db:
             row = db.execute('SELECT * FROM document_states WHERE document_id=?', (identity,)).fetchone()
             if row['removed'] or row['revision'] != expected_revision:
                 raise ValueError('资料已被其他请求修改，请刷新。')
-            db.execute('INSERT OR IGNORE INTO document_versions VALUES (?,?,?)',
-                       (identity, old_source.source_id, old_source.text))
-            db.execute('UPDATE document_states SET revision=revision+1,removed=?,text_override=? WHERE document_id=?',
-                       (int(remove), None if remove else text, identity))
+            snapshot = old_source.document.to_dict() if old_source.document and old_source.document.format == 'pdf' else None
+            db.execute('INSERT OR IGNORE INTO document_versions(document_id,source_id,text,snapshot_json) VALUES (?,?,?,?)',
+                       (identity, old_source.source_id, old_source.text, json.dumps(snapshot, ensure_ascii=False) if snapshot else None))
+            db.execute('UPDATE document_states SET revision=revision+1,removed=?,text_override=?,source_json=? WHERE document_id=?',
+                       (int(remove), None if remove else text,
+                        json.dumps(document.to_dict(), ensure_ascii=False) if document is not None and not remove else None, identity))
         return {'id': identity, 'removed': remove}

@@ -127,7 +127,11 @@ async function openDocument(id, expectedSourceId = null) {
     state.current = doc;
     clearFocus();
     $("document-title").textContent = doc.name;
-    $("document-meta").textContent = `${doc.line_count} 行 · 版本 ${doc.source_id.slice(0, 12)}`;
+    $("document-meta").textContent = doc.format === 'pdf'
+      ? `${doc.page_count} 页 · ${doc.line_count} 行文本视图 · ${doc.status === 'partial' ? '有待核对内容' : '解析完成'} · 版本 ${doc.source_id.slice(0, 12)}`
+      : `${doc.line_count} 行 · 版本 ${doc.source_id.slice(0, 12)}`;
+    $('view-source').textContent = doc.format === 'pdf' ? '提取文本' : '原文';
+    $('reparse-document').hidden = doc.format !== 'pdf';
     $("rendered-note").innerHTML = doc.html;
     renderSourceLines(doc.lines);
     $("reader-empty").hidden = true;
@@ -176,6 +180,11 @@ function makeElement(tag, className, text) {
   return element;
 }
 
+function citationLabel(citation) {
+  const pages = [...new Set((citation.locations || []).map((loc) => loc.page).filter(Boolean))];
+  return pages.length ? `${citation.name} · 第 ${pages.join('、')} 页 ↗` : `${citation.name} · L${citation.line_start}–L${citation.line_end} ↗`;
+}
+
 async function showCitation(citation) {
   try {
     const current = await request(`/api/documents/${citation.document_id}`);
@@ -191,6 +200,19 @@ async function showCitation(citation) {
   }
   const doc = await openDocument(citation.document_id, citation.source_id);
   if (!doc || doc.source_id !== citation.source_id) return;
+  if (doc.format === 'pdf' && doc.assets) {
+    const page = (citation.locations || []).find((loc) => loc.page)?.page;
+    const block = (doc.blocks || []).find((b) => b.line_start <= citation.line_end && b.line_end >= citation.line_start && b.asset_ids.length);
+    const assetId = citation.asset_id || block?.asset_ids[0] || (page ? `page-${page}` : null);
+    const asset = doc.assets.find((a) => a.asset_id === assetId);
+    if (asset) {
+      const dialog = document.createElement('dialog'); dialog.className = 'citation-snapshot';
+      const img = document.createElement('img'); img.src = asset.url; img.alt = citationLabel(citation); img.style.maxWidth = '100%';
+      const close = makeElement('button', '', '关闭'); close.addEventListener('click', () => dialog.close());
+      dialog.append(makeElement('h3', '', citationLabel(citation)), makeElement('pre', '', citation.excerpt), img, close);
+      dialog.addEventListener('close', () => dialog.remove()); document.body.append(dialog); dialog.showModal(); return;
+    }
+  }
   setView("source");
   document.querySelectorAll(".citation-highlight").forEach((node) => node.classList.remove("citation-highlight"));
   const lines = [...$("source-note").querySelectorAll(".source-line")];
@@ -214,7 +236,7 @@ function renderAnswer(result, container = $("answer-result")) {
     section.append(makeElement("span", "block-kind", kinds[block.kind] || block.kind));
     section.append(makeElement("p", "answer-text", block.text));
     for (const citation of block.citations) {
-      const button = makeElement("button", "citation", `${citation.name} · L${citation.line_start}–L${citation.line_end} ↗`);
+      const button = makeElement("button", "citation", citationLabel(citation));
       button.type = "button";
       button.append(makeElement("small", "", citation.excerpt));
       button.addEventListener("click", () => showCitation(citation));
@@ -543,7 +565,7 @@ async function refreshPracticeList() {
 }
 
 function practiceCitation(citation) {
-  const button = makeElement("button", "citation", `${citation.name} · L${citation.line_start}–L${citation.line_end} ↗`);
+  const button = makeElement("button", "citation", citationLabel(citation));
   button.type = "button";
   button.title = citation.excerpt;
   button.append(makeElement("small", "", citation.excerpt));

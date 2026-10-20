@@ -350,12 +350,16 @@ class PracticeStore:
 
 
 def archived_sources(snapshots: list[dict]) -> list[Source]:
-    return [Source(item["source_id"], Path(item["path"]), item["text"]) for item in snapshots]
+    from document_model import Document
+    return [Source(item["source_id"], Path(item["path"]), item["text"],
+                   Document.from_dict(item['document']) if item.get('document') else None) for item in snapshots]
 
 
 def public_session(record: dict) -> dict:
     snapshots = {item["source_id"]: item for item in record["snapshots"]}
     questions = []
+    from document_model import citation_metadata
+    structured = {s.source_id: s for s in archived_sources(record['snapshots'])}
     for question in record["questions"]:
         draft = question["draft"]
         citations = []
@@ -365,6 +369,7 @@ def public_session(record: dict) -> dict:
                 "document_id": source["document_id"], "source_id": citation.source_id,
                 "name": source["name"], "line_start": citation.line_start,
                 "line_end": citation.line_end,
+                **citation_metadata(structured[citation.source_id], citation),
                 "excerpt": "\n".join(source["text"].splitlines()[
                     citation.line_start - 1:citation.line_end
                 ]),

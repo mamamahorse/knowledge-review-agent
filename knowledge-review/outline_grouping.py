@@ -1,5 +1,6 @@
 """Bounded semantic comparison of selected candidates with their actual original evidence."""
 
+from agent_work import job_boundary
 import json
 from contextlib import closing
 from typing import Literal
@@ -117,6 +118,7 @@ def validate_result(result, inputs):
             raise ValueError('非重复建议不能指定代表目标。')
 
 
+@job_boundary("grouping")
 def run_grouping(store, identity, current):
     attempt = None
     try:
