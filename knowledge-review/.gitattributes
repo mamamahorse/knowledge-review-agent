@@ -15,3 +15,6 @@ evals/retrieval/expanded-v1/corpus/*.md whitespace=-blank-at-eof
 /docs/development-log.md text eol=lf
 /docs/product-design-v1.md text eol=lf
 /docs/WEB_AND_TOKEN_STREAM.md text eol=lf
+
+# Preserve raw console evidence rather than editing captured test output.
+docs/interview-prep/evidence/*.txt whitespace=-blank-at-eol
