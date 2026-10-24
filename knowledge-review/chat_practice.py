@@ -3,6 +3,7 @@
 import json
 import logging
 from contextlib import closing
+from agent_cancel import GenerationCancelled, checkpoint
 from uuid import uuid4
 
 from pydantic import Field
@@ -135,6 +136,7 @@ def start(store, conversations, identity, request_id, payload, *, sources=(), do
                 if changed != 1:
                     raise ValueError('本次出题任务已失效。')
             def guard():
+                checkpoint()
                 memory.guard()
                 if source_guard:
                     source_guard()
@@ -166,7 +168,7 @@ def start(store, conversations, identity, request_id, payload, *, sources=(), do
                                           collection_id=payload.get('collection_id', 'root'), basis=basis,
                                           document_dependencies=document_dependencies if strict else (), _connection=db)
                 db.execute("UPDATE chat_practice_jobs SET status='completed',attempt=NULL,session_id=? WHERE id=?", (session_id, job_id))
-        except Exception as exc:
+        except (Exception, GenerationCancelled) as exc:
             # Preserve request and originals; transport errors never expose provider secrets.
             error = str(exc) if isinstance(exc, (ValueError, BudgetError)) else '出题未完成，讨论与请求已保存，可以重试。'
             logging.getLogger(__name__).error('Discussion practice failed (%s)', type(exc).__name__)
@@ -179,6 +181,8 @@ def start(store, conversations, identity, request_id, payload, *, sources=(), do
                         {'location': list(e['loc']), 'type': e['type']} for e in
                         exc.__cause__.errors(include_input=False, include_context=False)]
                 db.execute("UPDATE chat_practice_jobs SET status='failed',attempt=NULL,error=?,diagnostics_json=? WHERE id=? AND attempt=? AND status='running'", (error, json.dumps(diagnostics), job_id, attempt))
+            if isinstance(exc, GenerationCancelled):
+                raise
         return job_public(store, job_id)
 
 

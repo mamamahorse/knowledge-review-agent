@@ -1,6 +1,7 @@
 """Bounded source analysis, reviewable proposals, and explicit atomic enrollment."""
 
 from agent_work import job_boundary
+from agent_cancel import GenerationCancelled, checkpoint
 import json
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -325,7 +326,8 @@ def enroll_candidate(store, identity, revision, collection_id, unit_id, language
             validate_question(draft, [source], visible)
             require_current(job, current_snapshots)
             snapshots = [s for s in job['snapshots'] if s['source_id'] == source.source_id]
+            checkpoint()
             return store.commit_enrollment(candidate, learning, draft, snapshots, visible, collection_id, unit_id, language)
-        except (OSError, RuntimeError, ValueError, KeyError):
+        except (OSError, RuntimeError, ValueError, KeyError, GenerationCancelled):
             store.enrollment_failed(identity, candidate['attempt'], '首次练习生成或保存失败，未加入计划，可以重试。')
             raise

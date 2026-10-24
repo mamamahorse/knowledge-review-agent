@@ -39,8 +39,10 @@ def structured_protocols(schema):
             {"tools": result_tools(schema), "tool_choice": {"type": "function", "function": {"name": RESULT_TOOL}}}]
 
 
-def request_structured(client, model: str, messages: list[dict], schema: type[Result], *, budget=None, before_request=None) -> Result:
+def request_structured(client, model: str, messages: list[dict], schema: type[Result], *, budget=None, before_request=None, on_delta=None) -> Result:
     budget = budget or GenerationBudget.from_env()
+    if on_delta is not None:
+        return request_streamed(client, model, messages, schema, budget, before_request, on_delta)
     provider = (str(client.base_url), model)
     if provider not in FUNCTION_OUTPUT_PROVIDERS:
         try:
@@ -61,6 +63,46 @@ def request_structured(client, model: str, messages: list[dict], schema: type[Re
                 raise RuntimeError("the model returned no structured result.")
             return message.parsed
     return request_tool_result(client, model, messages, schema, provider, budget, before_request)
+
+
+def request_streamed(client, model, messages, schema, budget, before_request, on_delta):
+    from answer_stream import collect_answer
+    provider = (str(client.base_url), model)
+    emitted = False
+
+    def emit(text):
+        nonlocal emitted
+        emitted = True
+        on_delta(text)
+
+    def send(**protocol):
+        if before_request:
+            before_request()
+        budget.check(messages, model=model, max_tokens=budget.output_tokens, **protocol)
+        return collect_answer(client, {'model': model, 'messages': messages,
+                                      'max_tokens': budget.output_tokens, **protocol},
+                              schema, emit, tools='tools' in protocol)
+
+    if provider not in FUNCTION_OUTPUT_PROVIDERS:
+        try:
+            return send(response_format=type_to_response_format_param(schema))
+        except APIError as exc:
+            if emitted or not response_format_is_unavailable(exc):
+                raise
+    mode = FUNCTION_OUTPUT_PROVIDERS.get(provider, 'forced')
+    choice = 'auto' if mode == 'auto' else {'type': 'function', 'function': {'name': RESULT_TOOL}}
+    try:
+        result = send(tools=result_tools(schema), tool_choice=choice)
+    except APIError as exc:
+        error = str(exc).lower()
+        if (emitted or mode != 'forced' or getattr(exc, 'status_code', None) != 400
+                or 'tool_choice' not in error
+                or not any(term in error for term in ('unsupported', 'unavailable', 'does not support'))):
+            raise
+        mode = 'auto'
+        result = send(tools=result_tools(schema), tool_choice='auto')
+    FUNCTION_OUTPUT_PROVIDERS[provider] = mode
+    return result
 
 
 def request_tool_result(client, model, messages, schema, provider, budget, before_request=None):

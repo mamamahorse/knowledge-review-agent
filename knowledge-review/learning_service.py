@@ -1,6 +1,7 @@
 """Opt-in enrollment and source-grounded variants of a fixed learning target."""
 
 import json
+from agent_cancel import checkpoint
 from pydantic import Field
 
 from context import format_context
@@ -109,6 +110,7 @@ def add_dimension(store, item_id, capability, *, response_language="zh"):
     if isinstance(parse_question(item['original']), DiscussionQuestion):
         from chat_practice import variant
         draft = variant(store, record, item, response_language, capability=capability)
+        checkpoint()
         session_id = store.create(draft.objective, '', 1, 0, [], [], draft,
             response_language=response_language, collection_id=item['collection_id'], basis=record['basis'])
         question_id = store.get(session_id)['questions'][0]['id']
@@ -129,6 +131,7 @@ def add_dimension(store, item_id, capability, *, response_language="zh"):
     draft = draft.model_copy(update={"learning": draft.learning.model_copy(update={"knowledge": LearningDraft.model_validate(
         {"knowledge": item["knowledge"], "target": item["target"]}).knowledge})})
     validate_question(draft, sources, visible)
+    checkpoint()
     session_id = store.create(draft.objective, record["focus_source_id"], record["focus_start"], record["focus_end"],
         record["snapshots"], record["visible_ranges"], draft, response_language=response_language,
         collection_id=item["collection_id"], basis=record.get('basis'))

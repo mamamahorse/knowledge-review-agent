@@ -2,3 +2,16 @@
 # Keep the fixtures unchanged rather than removing source lines for linting.
 evals/retrieval/corpus/*.md whitespace=-blank-at-eof
 evals/retrieval/expanded-v1/corpus/*.md whitespace=-blank-at-eof
+
+# Keep installed application text identical to the Gateway's hashed assets.
+# Do not rewrite the frozen retrieval corpus for whitespace cleanup.
+/*.py text eol=lf
+/*.txt text eol=lf
+/examples/*.md text eol=lf
+/web/** text eol=lf
+/README.md text eol=lf
+/AGENTS.md text eol=lf
+/docs/gateway-sse.md text eol=lf
+/docs/development-log.md text eol=lf
+/docs/product-design-v1.md text eol=lf
+/docs/WEB_AND_TOKEN_STREAM.md text eol=lf

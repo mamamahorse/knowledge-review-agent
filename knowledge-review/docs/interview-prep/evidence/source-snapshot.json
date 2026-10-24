@@ -1,0 +1,7476 @@
+{
+  "audit_date": "2026-10-23 Asia/Shanghai",
+  "git_head": "61be7fbc1aff46e621f1318409be9e1dd5bdfa31",
+  "initial_status": " M AGENTS.md\n M README.md\n M agent_cancel.py\n M agent_loop.py\n M agent_stream.py\n M chat_practice.py\n M docs/development-log.md\n M docs/gateway-sse.md\n M docs/product-design-v1.md\n M learning_service.py\n M model_client.py\n M outline_service.py\n M structured_output.py\n M test_agent_sse.py\n M test_management_chat_practice.py\n M test_outlines.py\n M web/static/app.js\n M web/static/retrieval-review.js\n M web/templates/index.html\n M web/templates/retrieval-review.html\n M web_app.py\n?? ../agentic_knowledge_review_agent.md\n?? ../cpp_high_concurrency_ai_gateway.md\n?? ../deeptutor_learning_and_project_design.md\n?? answer_stream.py\n?? docs/WEB_AND_TOKEN_STREAM.md\n?? docs/project-context/\n?? test_answer_stream.py\n?? web/static/chat-stream.js\n?? web/static/gateway.css\n?? web/static/gateway.js\n",
+  "question_file_sha256": "49994ebee0abfc05bc562161d2e3086764e9247a9e927150da671aade19d696e",
+  "files": {
+    "agent_cancel.py": {
+      "sha256": "01d60aae58a10eec877377e633c72bbf8920667500a38da11f67dff1650dd33a",
+      "lines": 135,
+      "symbols": {
+        "GenerationCancelled": [
+          15,
+          18
+        ],
+        "Cancellation": [
+          21,
+          32
+        ],
+        "Cancellation.__init__": [
+          22,
+          24
+        ],
+        "Cancellation.cancel": [
+          26,
+          27
+        ],
+        "Cancellation.check": [
+          29,
+          32
+        ],
+        "cancellation_scope": [
+          39,
+          44
+        ],
+        "checkpoint": [
+          47,
+          50
+        ],
+        "CancellableBody": [
+          53,
+          109
+        ],
+        "CancellableBody.__init__": [
+          54,
+          59
+        ],
+        "CancellableBody.wait": [
+          61,
+          74
+        ],
+        "CancellableBody.open": [
+          76,
+          81
+        ],
+        "CancellableBody.__iter__": [
+          83,
+          93
+        ],
+        "CancellableBody.cleanup": [
+          95,
+          101
+        ],
+        "CancellableBody.close": [
+          103,
+          109
+        ],
+        "CancellableTransport": [
+          112,
+          126
+        ],
+        "CancellableTransport.__init__": [
+          113,
+          114
+        ],
+        "CancellableTransport.handle_request": [
+          116,
+          126
+        ],
+        "model_http_options": [
+          129,
+          135
+        ]
+      }
+    },
+    "agent_loop.py": {
+      "sha256": "e4105659090be0d7ef5d5a8a6353184581d383ce56f16157a2fb5d708df72681",
+      "lines": 289,
+      "symbols": {
+        "AgentStep": [
+          28,
+          31
+        ],
+        "AgentRun": [
+          35,
+          41
+        ],
+        "FocusSelection": [
+          45,
+          51
+        ],
+        "focus_on_lines": [
+          54,
+          68
+        ],
+        "document_focus": [
+          71,
+          81
+        ],
+        "run_agent": [
+          84,
+          289
+        ]
+      }
+    },
+    "agent_stream.py": {
+      "sha256": "9641c566427486e18dad15e84ba15e536abc0ec19148b1c6c091c79bbefff781",
+      "lines": 473,
+      "symbols": {
+        "WorkLease": [
+          28,
+          32
+        ],
+        "WorkLease.__init__": [
+          29,
+          32
+        ],
+        "EventLimit": [
+          35,
+          36
+        ],
+        "encode": [
+          39,
+          44
+        ],
+        "EventBridge": [
+          47,
+          155
+        ],
+        "EventBridge.__init__": [
+          48,
+          60
+        ],
+        "EventBridge.announce": [
+          62,
+          73
+        ],
+        "EventBridge.announce.deliver": [
+          63,
+          68
+        ],
+        "EventBridge.emit": [
+          75,
+          103
+        ],
+        "EventBridge.complete": [
+          105,
+          124
+        ],
+        "EventBridge.events": [
+          126,
+          155
+        ],
+        "EventResponse": [
+          158,
+          172
+        ],
+        "EventResponse.__init__": [
+          159,
+          162
+        ],
+        "EventResponse.__call__": [
+          164,
+          172
+        ],
+        "StreamRunner": [
+          175,
+          473
+        ],
+        "StreamRunner.__init__": [
+          176,
+          195
+        ],
+        "StreamRunner.lifespan": [
+          198,
+          206
+        ],
+        "StreamRunner.snapshot": [
+          208,
+          214
+        ],
+        "StreamRunner._reserve": [
+          216,
+          233
+        ],
+        "StreamRunner._claim_key": [
+          235,
+          244
+        ],
+        "StreamRunner._drop_alias": [
+          246,
+          250
+        ],
+        "StreamRunner.cancel_job": [
+          252,
+          256
+        ],
+        "StreamRunner._release": [
+          258,
+          274
+        ],
+        "StreamRunner._submit": [
+          276,
+          319
+        ],
+        "StreamRunner._submit.work": [
+          278,
+          290
+        ],
+        "StreamRunner._submit.finished": [
+          301,
+          317
+        ],
+        "StreamRunner.title": [
+          321,
+          342
+        ],
+        "StreamRunner.detached": [
+          344,
+          380
+        ],
+        "StreamRunner.detached.decorate": [
+          345,
+          379
+        ],
+        "StreamRunner.detached.decorate.endpoint": [
+          348,
+          378
+        ],
+        "StreamRunner._watch_disconnect": [
+          382,
+          387
+        ],
+        "StreamRunner.run": [
+          389,
+          405
+        ],
+        "StreamRunner.bounded": [
+          407,
+          417
+        ],
+        "StreamRunner.bounded.endpoint": [
+          409,
+          411
+        ],
+        "StreamRunner.response": [
+          419,
+          473
+        ],
+        "StreamRunner.response.work": [
+          422,
+          449
+        ],
+        "StreamRunner.response.before_start_failure": [
+          453,
+          459
+        ]
+      }
+    },
+    "agent_work.py": {
+      "sha256": "43b8947e65bf8ec558af482cf0c123335e6ae69240153764ecc15cc8ea570161",
+      "lines": 87,
+      "symbols": {
+        "work_scope": [
+          17,
+          22
+        ],
+        "job_status": [
+          25,
+          37
+        ],
+        "interrupt_job": [
+          40,
+          55
+        ],
+        "job_boundary": [
+          58,
+          76
+        ],
+        "job_boundary.decorate": [
+          59,
+          75
+        ],
+        "job_boundary.decorate.run": [
+          61,
+          74
+        ],
+        "DetachedTask": [
+          79,
+          87
+        ],
+        "DetachedTask.__init__": [
+          81,
+          82
+        ],
+        "DetachedTask.add_task": [
+          84,
+          87
+        ]
+      }
+    },
+    "answer_stream.py": {
+      "sha256": "173e3957cd1cc24c781c93132613a904c505e8e3adaa078e9a5ddd8b15c9b8a1",
+      "lines": 160,
+      "symbols": {
+        "AnswerText": [
+          5,
+          113
+        ],
+        "AnswerText.__init__": [
+          7,
+          18
+        ],
+        "AnswerText.path": [
+          20,
+          24
+        ],
+        "AnswerText.consume_value": [
+          26,
+          31
+        ],
+        "AnswerText.feed": [
+          33,
+          113
+        ],
+        "collect_answer": [
+          116,
+          160
+        ]
+      }
+    },
+    "answers.py": {
+      "sha256": "c1febcfa48a8baf6ae5b6a5dad936ae4cc23ea38b50dfa3776386e0e8067a041",
+      "lines": 120,
+      "symbols": {
+        "StrictModel": [
+          12,
+          13
+        ],
+        "Citation": [
+          16,
+          20
+        ],
+        "AnswerBlock": [
+          23,
+          29
+        ],
+        "NoteAnswer": [
+          32,
+          35
+        ],
+        "SourceAnswerBlock": [
+          38,
+          42
+        ],
+        "SourceOnlyAnswer": [
+          45,
+          47
+        ],
+        "validate_answer": [
+          50,
+          102
+        ],
+        "render_answer": [
+          105,
+          120
+        ]
+      }
+    },
+    "chat_practice.py": {
+      "sha256": "eb568940691fedd18d66d0950412b0901a99a041d5b9c20de5dd99b76086c1ca",
+      "lines": 239,
+      "symbols": {
+        "ProposalBasis": [
+          25,
+          27
+        ],
+        "DiscussionProposal": [
+          30,
+          31
+        ],
+        "DocumentProposal": [
+          34,
+          35
+        ],
+        "validate_discussion": [
+          38,
+          42
+        ],
+        "job_public": [
+          45,
+          52
+        ],
+        "start": [
+          55,
+          186
+        ],
+        "live_basis": [
+          189,
+          198
+        ],
+        "grade_discussion": [
+          201,
+          218
+        ],
+        "variant": [
+          221,
+          239
+        ]
+      }
+    },
+    "chunking.py": {
+      "sha256": "f0b3ad01833a1dbc4dead84905510a20e902ee6a1a2fb50529f595ad40c3968c",
+      "lines": 245,
+      "symbols": {
+        "Chunk": [
+          14,
+          27
+        ],
+        "section_label": [
+          30,
+          34
+        ],
+        "chunk_source": [
+          37,
+          121
+        ],
+        "chunk_source.emit": [
+          63,
+          79
+        ],
+        "block_chunk": [
+          124,
+          143
+        ],
+        "document_chunks": [
+          146,
+          164
+        ],
+        "protect_tables": [
+          167,
+          190
+        ],
+        "with_table_context": [
+          193,
+          211
+        ],
+        "protect_selection": [
+          214,
+          227
+        ],
+        "format_chunks": [
+          230,
+          245
+        ]
+      }
+    },
+    "context.py": {
+      "sha256": "f7203fec1b2d6250e65bf79917cdb37a07d0b0a1d7f6565bd6b9f57c98fc8bdd",
+      "lines": 67,
+      "symbols": {
+        "validate_chunks": [
+          8,
+          21
+        ],
+        "format_context": [
+          24,
+          52
+        ],
+        "citation_is_visible": [
+          55,
+          67
+        ]
+      }
+    },
+    "conversation_context.py": {
+      "sha256": "77bc582dbf9fc56aea47a11bcd39b597921908bf4ba582813c95e78281cf6980",
+      "lines": 244,
+      "symbols": {
+        "SummaryItem": [
+          18,
+          22
+        ],
+        "ChatSummary": [
+          25,
+          27
+        ],
+        "ContextBundle": [
+          31,
+          69
+        ],
+        "ContextBundle.bind": [
+          44,
+          49
+        ],
+        "ContextBundle.as_data": [
+          51,
+          56
+        ],
+        "ContextBundle.prompt": [
+          58,
+          59
+        ],
+        "ContextBundle.snapshot": [
+          61,
+          69
+        ],
+        "summary_messages": [
+          72,
+          79
+        ],
+        "generate_summary": [
+          82,
+          87
+        ],
+        "update_summary": [
+          90,
+          135
+        ],
+        "update_summary.guard": [
+          94,
+          95
+        ],
+        "terms": [
+          138,
+          141
+        ],
+        "recall_originals": [
+          144,
+          190
+        ],
+        "build_context": [
+          193,
+          244
+        ],
+        "build_context.bundle": [
+          196,
+          198
+        ]
+      }
+    },
+    "conversation_memory.py": {
+      "sha256": "5973347e8cb6d28cda6dcc30d10d99c2fcce5054723a4e3d86b3c63fc9942dce",
+      "lines": 275,
+      "symbols": {
+        "MemoryReference": [
+          19,
+          25
+        ],
+        "DiscussionAnswerBlock": [
+          28,
+          32
+        ],
+        "MemoryAnswer": [
+          35,
+          38
+        ],
+        "SourceMemoryAnswer": [
+          41,
+          42
+        ],
+        "memory_tool_definitions": [
+          45,
+          57
+        ],
+        "terms": [
+          60,
+          65
+        ],
+        "fit_memory": [
+          68,
+          85
+        ],
+        "ConversationMemory": [
+          88,
+          275
+        ],
+        "ConversationMemory.__init__": [
+          89,
+          94
+        ],
+        "ConversationMemory.guard": [
+          96,
+          97
+        ],
+        "ConversationMemory.dependency_list": [
+          99,
+          100
+        ],
+        "ConversationMemory.bind": [
+          102,
+          103
+        ],
+        "ConversationMemory.eligible_sql": [
+          106,
+          110
+        ],
+        "ConversationMemory.messages": [
+          112,
+          114
+        ],
+        "ConversationMemory.message": [
+          116,
+          121
+        ],
+        "ConversationMemory.span": [
+          124,
+          126
+        ],
+        "ConversationMemory.remember": [
+          128,
+          136
+        ],
+        "ConversationMemory.execute": [
+          138,
+          160
+        ],
+        "ConversationMemory.with_neighbor": [
+          162,
+          173
+        ],
+        "ConversationMemory.search": [
+          175,
+          215
+        ],
+        "ConversationMemory.semantic_scores": [
+          217,
+          255
+        ],
+        "ConversationMemory.validate_references": [
+          257,
+          275
+        ]
+      }
+    },
+    "conversation_store.py": {
+      "sha256": "c6814007c90ef9d6ca41d94626027a648b7a65a0d28b62e9f8e195a78618a192",
+      "lines": 372,
+      "symbols": {
+        "ConversationBusy": [
+          13,
+          14
+        ],
+        "now": [
+          17,
+          18
+        ],
+        "fingerprint": [
+          21,
+          22
+        ],
+        "ConversationStore": [
+          25,
+          372
+        ],
+        "ConversationStore.__init__": [
+          26,
+          73
+        ],
+        "ConversationStore.connection": [
+          76,
+          86
+        ],
+        "ConversationStore.generation_lock": [
+          89,
+          115
+        ],
+        "ConversationStore.create": [
+          117,
+          122
+        ],
+        "ConversationStore.get_conversation": [
+          124,
+          131
+        ],
+        "ConversationStore.list": [
+          133,
+          135
+        ],
+        "ConversationStore.archive": [
+          137,
+          141
+        ],
+        "ConversationStore.check_dependencies": [
+          144,
+          148
+        ],
+        "ConversationStore.assert_dependencies": [
+          150,
+          152
+        ],
+        "ConversationStore.delete": [
+          154,
+          197
+        ],
+        "ConversationStore.rename": [
+          199,
+          204
+        ],
+        "ConversationStore.claim_title": [
+          206,
+          214
+        ],
+        "ConversationStore.opening_messages": [
+          216,
+          220
+        ],
+        "ConversationStore.publish_title": [
+          222,
+          229
+        ],
+        "ConversationStore.recover": [
+          231,
+          236
+        ],
+        "ConversationStore.begin": [
+          238,
+          273
+        ],
+        "ConversationStore.turn": [
+          275,
+          287
+        ],
+        "ConversationStore.finish": [
+          289,
+          315
+        ],
+        "ConversationStore.fail": [
+          317,
+          320
+        ],
+        "ConversationStore.skip": [
+          322,
+          327
+        ],
+        "ConversationStore.turns": [
+          329,
+          334
+        ],
+        "ConversationStore.history": [
+          336,
+          342
+        ],
+        "ConversationStore.summary": [
+          344,
+          352
+        ],
+        "ConversationStore.publish_summary": [
+          354,
+          372
+        ]
+      }
+    },
+    "conversation_title.py": {
+      "sha256": "2e381ed99d3b815b390bc45c51793ad1821658635c6dacc3f8d014dca1ab0b79",
+      "lines": 75,
+      "symbols": {
+        "ChatTitle": [
+          18,
+          19
+        ],
+        "generate_title": [
+          22,
+          35
+        ],
+        "auto_title": [
+          38,
+          75
+        ]
+      }
+    },
+    "docs/project-context/ARCHITECTURE.md": {
+      "sha256": "56220604330aaf448e17acff73f77d0a5694331dafa09f5c86b8601802f52659",
+      "lines": 239
+    },
+    "docs/project-context/ARCHITECTURE_DECISIONS.md": {
+      "sha256": "4b909342fccd59ac9103bb2876562fe274dbc6c8810a472f87f60caf2d12807d",
+      "lines": 212
+    },
+    "docs/project-context/CALL_CHAINS.md": {
+      "sha256": "19588a2dd24a720a14e9c32358aa4a58214ca6c4de0df5d44dad606c522248a0",
+      "lines": 372
+    },
+    "document_model.py": {
+      "sha256": "1bc3921818c040124705c3f2fdb53c9f32647fed254b50073870518eac3379f9",
+      "lines": 184,
+      "symbols": {
+        "digest": [
+          10,
+          11
+        ],
+        "Location": [
+          15,
+          19
+        ],
+        "Asset": [
+          23,
+          28
+        ],
+        "ContentBlock": [
+          32,
+          43
+        ],
+        "Document": [
+          47,
+          109
+        ],
+        "Document.parse_id": [
+          61,
+          63
+        ],
+        "Document.status": [
+          66,
+          67
+        ],
+        "Document.to_dict": [
+          69,
+          75
+        ],
+        "Document.from_dict": [
+          78,
+          105
+        ],
+        "Document.locations": [
+          107,
+          109
+        ],
+        "markdown_document": [
+          112,
+          139
+        ],
+        "attach_table_context": [
+          142,
+          167
+        ],
+        "snapshot_metadata": [
+          170,
+          172
+        ],
+        "citation_metadata": [
+          175,
+          184
+        ]
+      }
+    },
+    "embedding_config.py": {
+      "sha256": "326b793028c000e94c9f65730105cf04960cf978718cf473f02d98739dca8c45",
+      "lines": 57,
+      "symbols": {
+        "EmbeddingConfig": [
+          7,
+          17
+        ],
+        "EmbeddingConfig.__post_init__": [
+          13,
+          17
+        ],
+        "select_embedding_config": [
+          28,
+          47
+        ],
+        "effective_token_limit": [
+          50,
+          57
+        ]
+      }
+    },
+    "embeddings.py": {
+      "sha256": "37a2e25faea42e37f394bc3bc35715de5633c530ca1520df78c0d1bd74063f79",
+      "lines": 191,
+      "symbols": {
+        "passage_text": [
+          17,
+          21
+        ],
+        "LocalEmbedder": [
+          24,
+          191
+        ],
+        "LocalEmbedder.__init__": [
+          25,
+          48
+        ],
+        "LocalEmbedder.cache_profile": [
+          50,
+          75
+        ],
+        "LocalEmbedder._encode": [
+          77,
+          91
+        ],
+        "LocalEmbedder.fits": [
+          93,
+          96
+        ],
+        "LocalEmbedder.prepare_chunks": [
+          98,
+          134
+        ],
+        "LocalEmbedder._windows": [
+          136,
+          154
+        ],
+        "LocalEmbedder._encode_complete": [
+          156,
+          178
+        ],
+        "LocalEmbedder.embed_chunks": [
+          180,
+          186
+        ],
+        "LocalEmbedder.embed_query": [
+          188,
+          191
+        ]
+      }
+    },
+    "evaluation_cases.py": {
+      "sha256": "6e288861a60387b79158f03be8941d00f104e3aa36442b20c08688a92d8409c5",
+      "lines": 149,
+      "symbols": {
+        "Evidence": [
+          17,
+          20
+        ],
+        "ReferencePoint": [
+          23,
+          26
+        ],
+        "Relation": [
+          29,
+          33
+        ],
+        "GradeExample": [
+          36,
+          43
+        ],
+        "EvaluationCase": [
+          46,
+          55
+        ],
+        "EvaluationSuite": [
+          58,
+          64
+        ],
+        "file_for": [
+          67,
+          71
+        ],
+        "sources_for": [
+          74,
+          84
+        ],
+        "remap_citations": [
+          87,
+          96
+        ],
+        "validate_suite": [
+          99,
+          142
+        ],
+        "load_suite": [
+          145,
+          149
+        ]
+      }
+    },
+    "evaluation_report.py": {
+      "sha256": "83bb8b18c3cfe047b120a4f72ba9a57ca5e1e36b7ce0bf43eeb718f43a529afc",
+      "lines": 204,
+      "symbols": {
+        "fingerprint": [
+          8,
+          9
+        ],
+        "relation_checks": [
+          12,
+          30
+        ],
+        "grade_check": [
+          33,
+          38
+        ],
+        "review_template": [
+          41,
+          53
+        ],
+        "apply_review": [
+          56,
+          113
+        ],
+        "markdown_report": [
+          116,
+          183
+        ],
+        "write_report": [
+          186,
+          189
+        ],
+        "review_run": [
+          192,
+          204
+        ]
+      }
+    },
+    "generation_budget.py": {
+      "sha256": "04db0a68fd1ede6dae9db922106ad8d9c4a474175edf94827efce5021492e029",
+      "lines": 106,
+      "symbols": {
+        "BudgetError": [
+          11,
+          12
+        ],
+        "GenerationBudget": [
+          16,
+          70
+        ],
+        "GenerationBudget.__post_init__": [
+          22,
+          26
+        ],
+        "GenerationBudget.input_limit": [
+          29,
+          30
+        ],
+        "GenerationBudget.estimate": [
+          33,
+          36
+        ],
+        "GenerationBudget.usage": [
+          38,
+          39
+        ],
+        "GenerationBudget.fits": [
+          41,
+          42
+        ],
+        "GenerationBudget.check": [
+          44,
+          51
+        ],
+        "GenerationBudget.diagnostic": [
+          53,
+          57
+        ],
+        "GenerationBudget.from_env": [
+          60,
+          70
+        ],
+        "fit_chunks": [
+          73,
+          106
+        ]
+      }
+    },
+    "hybrid_retrieval.py": {
+      "sha256": "625b90bf7b7766681da5a47214faec6eb710d0864aeeb5ad315fbde100bbef87",
+      "lines": 135,
+      "symbols": {
+        "lexical_tokens": [
+          20,
+          38
+        ],
+        "HybridConfig": [
+          42,
+          69
+        ],
+        "HybridConfig.__post_init__": [
+          49,
+          57
+        ],
+        "HybridConfig.protocol": [
+          59,
+          69
+        ],
+        "BM25Index": [
+          72,
+          107
+        ],
+        "BM25Index.__init__": [
+          74,
+          86
+        ],
+        "BM25Index.search": [
+          88,
+          107
+        ],
+        "reciprocal_rank_fusion": [
+          110,
+          135
+        ]
+      }
+    },
+    "knowledge_tools.py": {
+      "sha256": "6814e9f5d8036f0ab931933feeef1a41e69d6114c4cf96bb3469d5dc10a67c71",
+      "lines": 347,
+      "symbols": {
+        "structure_metadata": [
+          20,
+          29
+        ],
+        "SearchResult": [
+          33,
+          63
+        ],
+        "SearchResult.as_dict": [
+          44,
+          63
+        ],
+        "ReadResult": [
+          67,
+          79
+        ],
+        "ReadResult.as_dict": [
+          71,
+          79
+        ],
+        "ToolExecution": [
+          83,
+          86
+        ],
+        "KnowledgeTools": [
+          89,
+          300
+        ],
+        "KnowledgeTools.__init__": [
+          92,
+          120
+        ],
+        "KnowledgeTools.embedder": [
+          123,
+          126
+        ],
+        "KnowledgeTools.search_notes": [
+          128,
+          148
+        ],
+        "KnowledgeTools._search_notes": [
+          150,
+          204
+        ],
+        "KnowledgeTools.read_source": [
+          206,
+          237
+        ],
+        "KnowledgeTools.execute": [
+          239,
+          300
+        ],
+        "knowledge_tool_definitions": [
+          303,
+          347
+        ]
+      }
+    },
+    "learning_service.py": {
+      "sha256": "f1e2ad095fa2c11ee148f16b0ce0b0285b119890eba679a9eb81ad3355d8e1e0",
+      "lines": 153,
+      "symbols": {
+        "EnrollmentDraft": [
+          17,
+          20
+        ],
+        "VariantDraft": [
+          23,
+          25
+        ],
+        "source_context": [
+          28,
+          32
+        ],
+        "enroll_question": [
+          35,
+          61
+        ],
+        "start_review": [
+          64,
+          104
+        ],
+        "add_dimension": [
+          107,
+          140
+        ],
+        "correct_grade": [
+          143,
+          153
+        ]
+      }
+    },
+    "learning_state.py": {
+      "sha256": "9f40b63e39967c8f52671682947a979621753655e65619dbdd89962e93ffae6b",
+      "lines": 111,
+      "symbols": {
+        "initialize": [
+          8,
+          72
+        ],
+        "reschedule": [
+          75,
+          83
+        ],
+        "record_evaluation": [
+          86,
+          111
+        ]
+      }
+    },
+    "learning_store.py": {
+      "sha256": "57ee20bdc80f398fbcc50ae0cb39f5471f8e4d6660eb269a676a58b49056cb2f",
+      "lines": 151,
+      "symbols": {
+        "LearningStore": [
+          17,
+          151
+        ],
+        "LearningStore.enroll": [
+          18,
+          58
+        ],
+        "LearningStore.item": [
+          60,
+          88
+        ],
+        "LearningStore.list_plan": [
+          90,
+          117
+        ],
+        "LearningStore.set_status": [
+          119,
+          123
+        ],
+        "LearningStore.set_rating": [
+          125,
+          137
+        ],
+        "LearningStore.revise_grade": [
+          139,
+          151
+        ]
+      }
+    },
+    "learning_types.py": {
+      "sha256": "de3a1ec876b749b0e2aa5bc9367142cfd42514531ffe687e46e07753f42b437a",
+      "lines": 36,
+      "symbols": {
+        "KnowledgeDraft": [
+          12,
+          16
+        ],
+        "TargetDraft": [
+          19,
+          25
+        ],
+        "LearningDraft": [
+          28,
+          30
+        ],
+        "DimensionObservation": [
+          33,
+          36
+        ]
+      }
+    },
+    "library_store.py": {
+      "sha256": "7cc05e436660b5425de7e153ac9be5d417f81e7b84c8727fc7a07086823b8297",
+      "lines": 163,
+      "symbols": {
+        "initialize_library": [
+          10,
+          40
+        ],
+        "LibraryStore": [
+          43,
+          163
+        ],
+        "LibraryStore.__init__": [
+          44,
+          45
+        ],
+        "LibraryStore.get": [
+          47,
+          52
+        ],
+        "LibraryStore.list": [
+          54,
+          56
+        ],
+        "LibraryStore.create": [
+          58,
+          64
+        ],
+        "LibraryStore.validate_name": [
+          67,
+          70
+        ],
+        "LibraryStore.rename": [
+          72,
+          78
+        ],
+        "LibraryStore.descendants": [
+          80,
+          86
+        ],
+        "LibraryStore.document_memberships": [
+          88,
+          90
+        ],
+        "LibraryStore.assign_documents": [
+          92,
+          97
+        ],
+        "LibraryStore.move_review": [
+          99,
+          104
+        ],
+        "LibraryStore.move": [
+          106,
+          119
+        ],
+        "LibraryStore.remove_collection": [
+          121,
+          139
+        ],
+        "LibraryStore.document_state": [
+          141,
+          148
+        ],
+        "LibraryStore.change_document": [
+          150,
+          163
+        ]
+      }
+    },
+    "main.py": {
+      "sha256": "4166bc35e4e39da2d8bf93343f830cb33846b115f68d8cfa8e6a4e460836577c",
+      "lines": 173,
+      "symbols": {
+        "main": [
+          12,
+          169
+        ]
+      }
+    },
+    "model_client.py": {
+      "sha256": "7ac953745a308f8e0398b5737f7a9c0e72b0854f7baa065f2cf465c5279c17d0",
+      "lines": 155,
+      "symbols": {
+        "model_settings": [
+          28,
+          41
+        ],
+        "answer_question": [
+          44,
+          155
+        ],
+        "answer_question.background": [
+          65,
+          67
+        ],
+        "answer_question.make_messages": [
+          69,
+          96
+        ],
+        "answer_question.accepts": [
+          107,
+          109
+        ]
+      }
+    },
+    "outline_context.py": {
+      "sha256": "3307989400a08ed679a0745db8bc38947169720f7019665e8c880353fcee8b46",
+      "lines": 320,
+      "symbols": {
+        "BriefPoint": [
+          21,
+          23
+        ],
+        "DocumentBrief": [
+          26,
+          28
+        ],
+        "FullOutlineDraft": [
+          31,
+          33
+        ],
+        "block_ends": [
+          36,
+          42
+        ],
+        "brief_messages": [
+          45,
+          52
+        ],
+        "merge_messages": [
+          55,
+          62
+        ],
+        "request_diagnostic": [
+          65,
+          69
+        ],
+        "generation_error": [
+          72,
+          78
+        ],
+        "plan_outline": [
+          81,
+          138
+        ],
+        "dependency": [
+          141,
+          142
+        ],
+        "pointers": [
+          145,
+          146
+        ],
+        "execute_step": [
+          149,
+          178
+        ],
+        "reduce_steps": [
+          181,
+          212
+        ],
+        "background_messages": [
+          215,
+          224
+        ],
+        "run_adaptive": [
+          227,
+          320
+        ]
+      }
+    },
+    "outline_group_plan.py": {
+      "sha256": "375add7005b4fb453ad196c66d51199f70cbaa4f3372b8bab41d8686dd5f90f1",
+      "lines": 109,
+      "symbols": {
+        "ComparisonPage": [
+          13,
+          15
+        ],
+        "page_messages": [
+          18,
+          30
+        ],
+        "comparisons": [
+          33,
+          34
+        ],
+        "output_estimate": [
+          37,
+          39
+        ],
+        "page_fits": [
+          42,
+          45
+        ],
+        "make_plan": [
+          48,
+          82
+        ],
+        "work_scopes": [
+          85,
+          109
+        ]
+      }
+    },
+    "outline_group_steps.py": {
+      "sha256": "0b154cfc6f5154a2ab8fdeb3b7e73852eedc3baa4138b30368978b8357dbf150",
+      "lines": 81,
+      "symbols": {
+        "initialize_steps": [
+          11,
+          21
+        ],
+        "steps": [
+          24,
+          29
+        ],
+        "require_attempt": [
+          32,
+          36
+        ],
+        "claim_step": [
+          39,
+          58
+        ],
+        "finish_step": [
+          61,
+          67
+        ],
+        "fail_step": [
+          70,
+          73
+        ],
+        "pause_grouping": [
+          76,
+          81
+        ]
+      }
+    },
+    "outline_group_store.py": {
+      "sha256": "e7a2aa5637235588fee488efa888b7deee172c385b7ae025020a40262201b75c",
+      "lines": 182,
+      "symbols": {
+        "initialize_groups": [
+          11,
+          37
+        ],
+        "rows": [
+          40,
+          53
+        ],
+        "invalidate_candidate": [
+          56,
+          59
+        ],
+        "approved_group": [
+          62,
+          69
+        ],
+        "enrollment_token": [
+          72,
+          79
+        ],
+        "resolve_unit": [
+          82,
+          99
+        ],
+        "create_run": [
+          102,
+          117
+        ],
+        "get_run": [
+          120,
+          125
+        ],
+        "recover_runs": [
+          128,
+          143
+        ],
+        "review_group": [
+          146,
+          182
+        ]
+      }
+    },
+    "outline_grouping.py": {
+      "sha256": "390650c9ce7e0afca1328467d39ff5fc480394f715f3b89c03714453d29fec2c",
+      "lines": 208,
+      "symbols": {
+        "GroupProposal": [
+          22,
+          29
+        ],
+        "GroupDraft": [
+          32,
+          34
+        ],
+        "inputs_for": [
+          37,
+          51
+        ],
+        "require_inputs": [
+          54,
+          58
+        ],
+        "group_messages": [
+          61,
+          81
+        ],
+        "start_grouping": [
+          84,
+          100
+        ],
+        "validate_result": [
+          103,
+          118
+        ],
+        "run_grouping": [
+          122,
+          170
+        ],
+        "retry_grouping": [
+          173,
+          186
+        ],
+        "public_grouping": [
+          189,
+          208
+        ]
+      }
+    },
+    "outline_integration.py": {
+      "sha256": "3d267e5c353731486cff5ce9ef0fcd9b95f4f45fa8faaa0d407e0eec0a29459f",
+      "lines": 221,
+      "symbols": {
+        "key": [
+          16,
+          17
+        ],
+        "validate_page": [
+          20,
+          42
+        ],
+        "progress": [
+          45,
+          62
+        ],
+        "select_page": [
+          65,
+          79
+        ],
+        "update_plan": [
+          82,
+          86
+        ],
+        "proposals_from_proofs": [
+          89,
+          123
+        ],
+        "publish": [
+          126,
+          142
+        ],
+        "execute_integration": [
+          145,
+          208
+        ],
+        "public_integration": [
+          211,
+          221
+        ]
+      }
+    },
+    "outline_review.py": {
+      "sha256": "4c117888f1125cc54dd6e44ab31bf762bf95b3cef2c36d905f9272235779d288",
+      "lines": 268,
+      "symbols": {
+        "review_inputs": [
+          21,
+          33
+        ],
+        "start_source_review": [
+          36,
+          62
+        ],
+        "check_current_review": [
+          65,
+          71
+        ],
+        "original_evidence": [
+          74,
+          76
+        ],
+        "evidence_and_observations": [
+          79,
+          92
+        ],
+        "run_source_review": [
+          96,
+          166
+        ],
+        "continue_source_review": [
+          169,
+          181
+        ],
+        "run_grouping_with_reviews": [
+          184,
+          199
+        ],
+        "apply_source_review": [
+          202,
+          238
+        ],
+        "public_source_reviews": [
+          241,
+          268
+        ]
+      }
+    },
+    "outline_review_model.py": {
+      "sha256": "eb078dd872ad106f7b269811e690b23d42eb30712582cc23138e1f534dbf247a",
+      "lines": 169,
+      "symbols": {
+        "ReviewLookup": [
+          15,
+          20
+        ],
+        "CandidateClarification": [
+          23,
+          25
+        ],
+        "ReviewAction": [
+          28,
+          38
+        ],
+        "ReviewConclusion": [
+          41,
+          43
+        ],
+        "ReviewedGroupProposal": [
+          46,
+          50
+        ],
+        "action_schema": [
+          53,
+          54
+        ],
+        "validate_action": [
+          57,
+          86
+        ],
+        "review_messages": [
+          89,
+          108
+        ],
+        "prepare_review_request": [
+          111,
+          120
+        ],
+        "execute_lookup": [
+          123,
+          169
+        ]
+      }
+    },
+    "outline_review_store.py": {
+      "sha256": "5ea823aad47b41594ef6e82172240dd890f3c17a0e2e6e4f94a4010abcbd2755",
+      "lines": 143,
+      "symbols": {
+        "initialize_reviews": [
+          11,
+          27
+        ],
+        "get_review": [
+          30,
+          38
+        ],
+        "review_steps": [
+          41,
+          47
+        ],
+        "check_members": [
+          50,
+          58
+        ],
+        "require_review": [
+          61,
+          68
+        ],
+        "claim_review_step": [
+          71,
+          90
+        ],
+        "finish_review_step": [
+          93,
+          98
+        ],
+        "finish_review": [
+          101,
+          105
+        ],
+        "pause_review": [
+          108,
+          114
+        ],
+        "recover_reviews": [
+          117,
+          143
+        ]
+      }
+    },
+    "outline_route_model.py": {
+      "sha256": "5f40d9ba05d7d566e284cd164b25f947c45187cb5162fb5dac48a155237063ba",
+      "lines": 106,
+      "symbols": {
+        "RouteComparison": [
+          11,
+          17
+        ],
+        "MissingPrerequisite": [
+          20,
+          23
+        ],
+        "RoutePage": [
+          26,
+          29
+        ],
+        "all_pairs": [
+          32,
+          34
+        ],
+        "page_messages": [
+          37,
+          56
+        ],
+        "prepare_page": [
+          59,
+          71
+        ],
+        "validate_page": [
+          74,
+          93
+        ],
+        "ordered_nodes": [
+          96,
+          106
+        ]
+      }
+    },
+    "outline_route_store.py": {
+      "sha256": "ed063de41e72b4f7c27bac7be97232973ef7baca33b21d99fca556a5b20d0fb5",
+      "lines": 116,
+      "symbols": {
+        "initialize_routes": [
+          8,
+          27
+        ],
+        "decode": [
+          30,
+          34
+        ],
+        "route_record": [
+          37,
+          41
+        ],
+        "route_pages": [
+          44,
+          46
+        ],
+        "route_edges": [
+          49,
+          50
+        ],
+        "require_attempt": [
+          53,
+          59
+        ],
+        "claim_page": [
+          62,
+          77
+        ],
+        "publish_page": [
+          80,
+          89
+        ],
+        "pause_route": [
+          92,
+          98
+        ],
+        "recover_routes": [
+          101,
+          116
+        ]
+      }
+    },
+    "outline_routes.py": {
+      "sha256": "684d40cfd1a227798c2ad4f12b74ece5d1690d9d9f49ed01e1072b6a1f58b989",
+      "lines": 242,
+      "symbols": {
+        "selection_view": [
+          18,
+          28
+        ],
+        "input_stamp": [
+          31,
+          37
+        ],
+        "check_stamp": [
+          40,
+          43
+        ],
+        "current_route": [
+          46,
+          49
+        ],
+        "start_route": [
+          52,
+          84
+        ],
+        "run_route": [
+          88,
+          133
+        ],
+        "continue_route": [
+          136,
+          145
+        ],
+        "displayed_order": [
+          148,
+          153
+        ],
+        "edit_edge": [
+          156,
+          178
+        ],
+        "save_order": [
+          181,
+          191
+        ],
+        "add_edge": [
+          194,
+          210
+        ],
+        "public_routes": [
+          213,
+          242
+        ]
+      }
+    },
+    "outline_service.py": {
+      "sha256": "2f75c779d7ec4c9917452e6e274d3628c480fbf69639bf939afbfd19054cb0ca",
+      "lines": 333,
+      "symbols": {
+        "KnowledgeProposal": [
+          27,
+          29
+        ],
+        "TargetProposal": [
+          32,
+          35
+        ],
+        "LearningProposal": [
+          38,
+          40
+        ],
+        "OutlineDraft": [
+          43,
+          45
+        ],
+        "scope_fingerprint": [
+          48,
+          50
+        ],
+        "section_manifest": [
+          53,
+          76
+        ],
+        "excerpt": [
+          79,
+          81
+        ],
+        "outline_messages": [
+          84,
+          94
+        ],
+        "fits_request": [
+          97,
+          100
+        ],
+        "check_request": [
+          103,
+          106
+        ],
+        "prepare_outline": [
+          109,
+          143
+        ],
+        "validate_learning": [
+          146,
+          156
+        ],
+        "require_current": [
+          159,
+          161
+        ],
+        "run_outline": [
+          165,
+          204
+        ],
+        "public_outline": [
+          207,
+          269
+        ],
+        "candidate_context": [
+          272,
+          278
+        ],
+        "candidate_visible": [
+          281,
+          286
+        ],
+        "edit_candidate": [
+          289,
+          296
+        ],
+        "enroll_candidate": [
+          299,
+          333
+        ]
+      }
+    },
+    "outline_store.py": {
+      "sha256": "c8bd4b20699543fd31e3e6f9ce8a80b80c0bdf042df3b65bc485291a357596a4",
+      "lines": 336,
+      "symbols": {
+        "timestamp": [
+          12,
+          13
+        ],
+        "initialize_outlines": [
+          16,
+          48
+        ],
+        "OutlineBusy": [
+          51,
+          52
+        ],
+        "OutlineStore": [
+          55,
+          336
+        ],
+        "OutlineStore.__init__": [
+          56,
+          63
+        ],
+        "OutlineStore.lock": [
+          66,
+          91
+        ],
+        "OutlineStore.create": [
+          93,
+          117
+        ],
+        "OutlineStore.get": [
+          119,
+          133
+        ],
+        "OutlineStore.list": [
+          135,
+          138
+        ],
+        "OutlineStore.candidate": [
+          140,
+          145
+        ],
+        "OutlineStore.recover": [
+          147,
+          154
+        ],
+        "OutlineStore.resume": [
+          156,
+          165
+        ],
+        "OutlineStore.start": [
+          167,
+          170
+        ],
+        "OutlineStore.pause": [
+          172,
+          180
+        ],
+        "OutlineStore.claim_batch": [
+          182,
+          192
+        ],
+        "OutlineStore.finish_batch": [
+          194,
+          206
+        ],
+        "OutlineStore.fail_batch": [
+          208,
+          211
+        ],
+        "OutlineStore.settle": [
+          213,
+          218
+        ],
+        "OutlineStore.context_step": [
+          220,
+          227
+        ],
+        "OutlineStore.claim_context": [
+          229,
+          237
+        ],
+        "OutlineStore.finish_context": [
+          239,
+          252
+        ],
+        "OutlineStore.fail_context": [
+          254,
+          257
+        ],
+        "OutlineStore.retire_context_attempts": [
+          259,
+          263
+        ],
+        "OutlineStore.split_batch": [
+          265,
+          282
+        ],
+        "OutlineStore.edit": [
+          284,
+          294
+        ],
+        "OutlineStore.begin_enrollment": [
+          296,
+          308
+        ],
+        "OutlineStore.enrollment_failed": [
+          310,
+          312
+        ],
+        "OutlineStore.recover_candidate": [
+          314,
+          317
+        ],
+        "OutlineStore.commit_enrollment": [
+          319,
+          336
+        ]
+      }
+    },
+    "pdf_parser.py": {
+      "sha256": "dee657e717e2249a69f45ac655d8c4af76c64311196350b518181e0569b66c0f",
+      "lines": 302,
+      "symbols": {
+        "pdf_library": [
+          21,
+          26
+        ],
+        "profile": [
+          29,
+          51
+        ],
+        "load_pdf": [
+          54,
+          81
+        ],
+        "table_text": [
+          84,
+          91
+        ],
+        "table_text.cell": [
+          85,
+          86
+        ],
+        "parse_pdf": [
+          94,
+          233
+        ],
+        "docling_pages": [
+          236,
+          270
+        ],
+        "raw_path": [
+          273,
+          283
+        ],
+        "render_page": [
+          286,
+          294
+        ],
+        "render_asset": [
+          297,
+          302
+        ]
+      }
+    },
+    "pdf_vision.py": {
+      "sha256": "0993df8aba660cbe504a09aecd7f7830b2b005ad8e081fc8dfc4aa5b22ec148f",
+      "lines": 197,
+      "symbols": {
+        "VisionUnsupported": [
+          19,
+          20
+        ],
+        "VisionRequestFailed": [
+          23,
+          24
+        ],
+        "vision_settings": [
+          30,
+          40
+        ],
+        "capability_key": [
+          43,
+          45
+        ],
+        "vision_status": [
+          48,
+          57
+        ],
+        "image_input_is_unsupported": [
+          60,
+          79
+        ],
+        "TranscribedBlock": [
+          82,
+          85
+        ],
+        "PageTranscription": [
+          88,
+          91
+        ],
+        "VisualReading": [
+          94,
+          97
+        ],
+        "VisionBudget": [
+          101,
+          125
+        ],
+        "VisionBudget.usage": [
+          104,
+          121
+        ],
+        "VisionBudget.diagnostic": [
+          123,
+          125
+        ],
+        "enabled": [
+          128,
+          130
+        ],
+        "vision_request": [
+          133,
+          156
+        ],
+        "transcribe_page": [
+          159,
+          160
+        ],
+        "inspect_visual": [
+          163,
+          197
+        ]
+      }
+    },
+    "practice_model.py": {
+      "sha256": "72ba4fe5f63bbcba08f299107872985630142e0f7582ba2a00a8b793faafb107",
+      "lines": 239,
+      "symbols": {
+        "ExerciseDraft": [
+          21,
+          25
+        ],
+        "QuestionDraft": [
+          28,
+          30
+        ],
+        "LearningQuestionDraft": [
+          33,
+          35
+        ],
+        "DiscussionKnowledge": [
+          38,
+          39
+        ],
+        "DiscussionLearning": [
+          42,
+          43
+        ],
+        "DiscussionQuestion": [
+          46,
+          51
+        ],
+        "parse_question": [
+          54,
+          56
+        ],
+        "GradeDraft": [
+          59,
+          71
+        ],
+        "SemanticGradeDraft": [
+          74,
+          80
+        ],
+        "DiscussionGrade": [
+          83,
+          84
+        ],
+        "parse_grade": [
+          87,
+          90
+        ],
+        "_request_structured": [
+          93,
+          107
+        ],
+        "validate_question": [
+          110,
+          142
+        ],
+        "validate_question.check_text_basis": [
+          119,
+          126
+        ],
+        "question_messages": [
+          145,
+          169
+        ],
+        "generate_question": [
+          172,
+          178
+        ],
+        "validate_grade": [
+          181,
+          204
+        ],
+        "grade_answer": [
+          207,
+          239
+        ]
+      }
+    },
+    "practice_provenance.py": {
+      "sha256": "d91cfad65922a274a889b4d136f3c885845621bb2e8942f282a773526aded2d6",
+      "lines": 62,
+      "symbols": {
+        "initialize": [
+          6,
+          19
+        ],
+        "check_dependencies": [
+          22,
+          27
+        ],
+        "check_session": [
+          30,
+          35
+        ],
+        "revoke": [
+          38,
+          48
+        ],
+        "basis_record": [
+          51,
+          62
+        ]
+      }
+    },
+    "practice_service.py": {
+      "sha256": "92924af4e88662ed1a4c01f423eb1bde60c065d81141f08ddc1e8ce404372dd7",
+      "lines": 140,
+      "symbols": {
+        "start_practice": [
+          23,
+          94
+        ],
+        "start_practice.accepts": [
+          68,
+          71
+        ],
+        "_visible_chunks": [
+          97,
+          107
+        ],
+        "grade_pending_answer": [
+          110,
+          140
+        ]
+      }
+    },
+    "practice_store.py": {
+      "sha256": "76c9bd5e05fb61ce7e3a4d6a489b92dc27a0b1fddff5a59213d854fe5bf341a8",
+      "lines": 419,
+      "symbols": {
+        "_now": [
+          23,
+          24
+        ],
+        "PracticeStore": [
+          27,
+          349
+        ],
+        "PracticeStore.__init__": [
+          28,
+          75
+        ],
+        "PracticeStore._connect": [
+          77,
+          83
+        ],
+        "PracticeStore.assert_basis": [
+          85,
+          87
+        ],
+        "PracticeStore.transaction": [
+          90,
+          97
+        ],
+        "PracticeStore.create": [
+          99,
+          151
+        ],
+        "PracticeStore.get": [
+          153,
+          188
+        ],
+        "PracticeStore.list": [
+          190,
+          205
+        ],
+        "PracticeStore.submit_answer": [
+          207,
+          239
+        ],
+        "PracticeStore.set_grading_language": [
+          241,
+          254
+        ],
+        "PracticeStore.save_grade": [
+          256,
+          289
+        ],
+        "PracticeStore.continue_follow_up": [
+          291,
+          313
+        ],
+        "PracticeStore.reveal_reference": [
+          315,
+          325
+        ],
+        "PracticeStore.finish": [
+          327,
+          337
+        ],
+        "PracticeStore.save_correction": [
+          339,
+          349
+        ],
+        "archived_sources": [
+          352,
+          355
+        ],
+        "public_session": [
+          358,
+          419
+        ]
+      }
+    },
+    "quality_chat_practice.py": {
+      "sha256": "623be9a5072634b358ddf51fe66e2353a66af4bacdfe1e889f17745ff28e59c8",
+      "lines": 76,
+      "symbols": {
+        "main": [
+          19,
+          72
+        ],
+        "main.controlled": [
+          44,
+          55
+        ]
+      }
+    },
+    "quality_eval.py": {
+      "sha256": "6a6f8c822ff7e40894fe6628fe49d6202e01cebcf905c6ba53066c030a09f91f",
+      "lines": 303,
+      "symbols": {
+        "EvaluationCallLimit": [
+          40,
+          41
+        ],
+        "safe_error": [
+          44,
+          46
+        ],
+        "controlled_response": [
+          49,
+          89
+        ],
+        "fixed_outline": [
+          92,
+          114
+        ],
+        "extraction": [
+          117,
+          129
+        ],
+        "grouping": [
+          132,
+          145
+        ],
+        "grading": [
+          148,
+          163
+        ],
+        "run_suite": [
+          166,
+          267
+        ],
+        "main": [
+          270,
+          299
+        ]
+      }
+    },
+    "quality_memory.py": {
+      "sha256": "88b89f954c9f0aa9972ce45bd778b1069e37d29ca629585af1249fe21234b828",
+      "lines": 140,
+      "symbols": {
+        "seed": [
+          24,
+          29
+        ],
+        "ControlledEmbedder": [
+          32,
+          40
+        ],
+        "ControlledEmbedder.cache_profile": [
+          33,
+          34
+        ],
+        "ControlledEmbedder.embed_chunks": [
+          36,
+          37
+        ],
+        "ControlledEmbedder.embed_query": [
+          39,
+          40
+        ],
+        "controlled_client": [
+          43,
+          61
+        ],
+        "controlled_client.respond": [
+          45,
+          60
+        ],
+        "main": [
+          64,
+          136
+        ],
+        "main.run": [
+          91,
+          94
+        ]
+      }
+    },
+    "quality_production_retrieval.py": {
+      "sha256": "885389c47d3368b577153163a75885e02716fec790e7c662d64ed83c8fcd13b7",
+      "lines": 109,
+      "symbols": {
+        "main": [
+          24,
+          106
+        ]
+      }
+    },
+    "quality_retrieval.py": {
+      "sha256": "8a56aaf6531f3545e2f7fe69edcb654bf409e3bb4ad36ea08fd749f2690e02bd",
+      "lines": 431,
+      "symbols": {
+        "write_json": [
+          26,
+          30
+        ],
+        "TimedEmbedder": [
+          33,
+          59
+        ],
+        "TimedEmbedder.__init__": [
+          35,
+          41
+        ],
+        "TimedEmbedder.cache_profile": [
+          43,
+          44
+        ],
+        "TimedEmbedder.prepare_chunks": [
+          46,
+          47
+        ],
+        "TimedEmbedder.embed_query": [
+          49,
+          53
+        ],
+        "TimedEmbedder.embed_chunks": [
+          55,
+          59
+        ],
+        "run_baseline": [
+          62,
+          110
+        ],
+        "hit_records": [
+          113,
+          117
+        ],
+        "run_hybrid": [
+          120,
+          195
+        ],
+        "code_fingerprint": [
+          198,
+          203
+        ],
+        "main": [
+          206,
+          427
+        ]
+      }
+    },
+    "quality_route.py": {
+      "sha256": "8ede349e9e10b0f6c895715c0113e96eefb3b413589d25f4c3569f227fe4693b",
+      "lines": 113,
+      "symbols": {
+        "seed_outline": [
+          44,
+          60
+        ],
+        "controlled": [
+          63,
+          72
+        ],
+        "main": [
+          75,
+          110
+        ],
+        "main.invoke": [
+          88,
+          94
+        ]
+      }
+    },
+    "quality_source_review.py": {
+      "sha256": "0aed5fc61a2e2cb1a566d152390435ce86b35ff079ad6e6e979eebeb72bb7036",
+      "lines": 168,
+      "symbols": {
+        "failure_category": [
+          27,
+          32
+        ],
+        "seed_review": [
+          72,
+          103
+        ],
+        "controlled": [
+          106,
+          119
+        ],
+        "evaluate": [
+          122,
+          159
+        ]
+      }
+    },
+    "rerank_model.py": {
+      "sha256": "74a2e87d46e2ae657388c951483cbe3f1eee711116ab4bfcf97d45e61239c3f5",
+      "lines": 127,
+      "symbols": {
+        "RerankConfig": [
+          21,
+          34
+        ],
+        "RerankConfig.__post_init__": [
+          29,
+          34
+        ],
+        "model_home": [
+          37,
+          38
+        ],
+        "download_reranker": [
+          41,
+          50
+        ],
+        "LocalReranker": [
+          53,
+          127
+        ],
+        "LocalReranker.__init__": [
+          54,
+          83
+        ],
+        "LocalReranker.token_count": [
+          85,
+          87
+        ],
+        "LocalReranker.predict": [
+          89,
+          103
+        ],
+        "LocalReranker.profile": [
+          105,
+          127
+        ]
+      }
+    },
+    "rerank_retrieval.py": {
+      "sha256": "6c4132de5e7b41f7c0022472a8a636f222ea1fd7602f0814f510d17727ab7c25",
+      "lines": 196,
+      "symbols": {
+        "validate_hybrid_pool": [
+          9,
+          39
+        ],
+        "document_windows": [
+          42,
+          74
+        ],
+        "rerank_pool": [
+          77,
+          102
+        ],
+        "run_rerank": [
+          105,
+          148
+        ],
+        "validate_same_pool": [
+          151,
+          196
+        ]
+      }
+    },
+    "response_preferences.py": {
+      "sha256": "3565c5109a2612701a169199df00afabc38893f4cbb9e63f39efd454a42d696e",
+      "lines": 21,
+      "symbols": {
+        "validate_language": [
+          10,
+          12
+        ],
+        "preference_messages": [
+          15,
+          21
+        ]
+      }
+    },
+    "retrieval.py": {
+      "sha256": "a41f5c253aafef85328699c1f0acbccb351fc37f278b05bcc715fd5e8d37b6c0",
+      "lines": 49,
+      "symbols": {
+        "SearchHit": [
+          11,
+          13
+        ],
+        "unit_vector": [
+          16,
+          22
+        ],
+        "rank_chunks": [
+          25,
+          41
+        ],
+        "format_hits": [
+          44,
+          49
+        ]
+      }
+    },
+    "retrieval_benchmark_data.py": {
+      "sha256": "6fa6ee8b1a4100d5b73f646f39b9334706ee877fbd4386d16302cd60985301be",
+      "lines": 352,
+      "symbols": {
+        "digest": [
+          20,
+          21
+        ],
+        "now": [
+          24,
+          25
+        ],
+        "load_suite": [
+          28,
+          57
+        ],
+        "make_manifest": [
+          60,
+          72
+        ],
+        "covering_bundles": [
+          75,
+          85
+        ],
+        "initial_review": [
+          88,
+          105
+        ],
+        "validate_review": [
+          108,
+          139
+        ],
+        "ReviewStore": [
+          142,
+          352
+        ],
+        "ReviewStore.__init__": [
+          143,
+          155
+        ],
+        "ReviewStore.connect": [
+          157,
+          160
+        ],
+        "ReviewStore.create": [
+          162,
+          168
+        ],
+        "ReviewStore.list": [
+          170,
+          173
+        ],
+        "ReviewStore.manifest": [
+          175,
+          180
+        ],
+        "ReviewStore.query": [
+          183,
+          184
+        ],
+        "ReviewStore.review": [
+          186,
+          193
+        ],
+        "ReviewStore.save": [
+          195,
+          222
+        ],
+        "ReviewStore.adopt_agent_audit": [
+          224,
+          287
+        ],
+        "ReviewStore.agent_audit": [
+          289,
+          299
+        ],
+        "ReviewStore.agent_audit_case": [
+          301,
+          303
+        ],
+        "ReviewStore.freeze": [
+          305,
+          341
+        ],
+        "ReviewStore.frozen": [
+          343,
+          348
+        ],
+        "ReviewStore.freezes": [
+          350,
+          352
+        ]
+      }
+    },
+    "retrieval_benchmark_metrics.py": {
+      "sha256": "d77eec4724d2f7a8d204a4f0ddf738f82e945fd45bdd19359c786c4497f3ff88",
+      "lines": 168,
+      "symbols": {
+        "percentile": [
+          12,
+          19
+        ],
+        "score_run": [
+          22,
+          158
+        ],
+        "score_run.aggregate": [
+          111,
+          113
+        ],
+        "rerank_diagnostics": [
+          161,
+          168
+        ]
+      }
+    },
+    "retrieval_comparison.py": {
+      "sha256": "b1724068cfb536f26ee03e59e02ea8a5efa8f3a8bed3c8ede0d9526a16f3fd0a",
+      "lines": 193,
+      "symbols": {
+        "compare_runs": [
+          10,
+          129
+        ],
+        "comparison_markdown": [
+          132,
+          193
+        ]
+      }
+    },
+    "retrieval_failure_report.py": {
+      "sha256": "19b00dde22b5487f29e56427a49d571596e272266517fced319f74c98e0f2a33",
+      "lines": 66,
+      "symbols": {
+        "failure_inventory": [
+          4,
+          53
+        ],
+        "failure_markdown": [
+          56,
+          66
+        ]
+      }
+    },
+    "retrieval_fixture_audit.py": {
+      "sha256": "73a5522b65ebeb1729372582f9cd676edf2a4fbee4a1603bc972a570377b1091",
+      "lines": 56,
+      "symbols": {
+        "bind_section_audit": [
+          11,
+          56
+        ]
+      }
+    },
+    "retrieval_review_app.py": {
+      "sha256": "25ac19b2002ca20e335c53b7b0a025058a2931e4bf795bcbba99d3803774a371",
+      "lines": 120,
+      "symbols": {
+        "Contract": [
+          14,
+          15
+        ],
+        "Judgment": [
+          18,
+          21
+        ],
+        "EvidenceGroup": [
+          24,
+          27
+        ],
+        "Review": [
+          30,
+          39
+        ],
+        "SaveReview": [
+          42,
+          44
+        ],
+        "Freeze": [
+          47,
+          51
+        ],
+        "review_router": [
+          54,
+          110
+        ],
+        "review_router.store": [
+          57,
+          58
+        ],
+        "review_router.call": [
+          60,
+          66
+        ],
+        "review_router.page": [
+          69,
+          70
+        ],
+        "review_router.benchmarks": [
+          73,
+          74
+        ],
+        "review_router.overview": [
+          77,
+          85
+        ],
+        "review_router.overview.operation": [
+          78,
+          84
+        ],
+        "review_router.detail": [
+          88,
+          99
+        ],
+        "review_router.detail.operation": [
+          89,
+          98
+        ],
+        "review_router.save": [
+          102,
+          103
+        ],
+        "review_router.freeze": [
+          106,
+          108
+        ],
+        "create_review_app": [
+          113,
+          117
+        ]
+      }
+    },
+    "review_scheduler.py": {
+      "sha256": "b5ba02b107fbdcfd4ebebc0e63fd8f5b55f75ebe1acbfb44c0e54a3dd7bb08da",
+      "lines": 28,
+      "symbols": {
+        "initial_schedule": [
+          9,
+          12
+        ],
+        "replay": [
+          15,
+          24
+        ],
+        "now": [
+          27,
+          28
+        ]
+      }
+    },
+    "route_recommendation.py": {
+      "sha256": "5cae652a57ad8ac2521f63d7366d48a28d9eef92d62b4d7332e0d455ade1e203",
+      "lines": 54,
+      "symbols": {
+        "recommend_next": [
+          7,
+          54
+        ],
+        "recommend_next.result": [
+          36,
+          40
+        ]
+      }
+    },
+    "sources.py": {
+      "sha256": "43cf4c45b648f40d85c5f065ee20e19f4195b7c33ae267e1bbdc618bfc37a917",
+      "lines": 69,
+      "symbols": {
+        "Source": [
+          10,
+          20
+        ],
+        "Source.__post_init__": [
+          16,
+          20
+        ],
+        "read_note": [
+          23,
+          29
+        ],
+        "add_line_numbers": [
+          32,
+          33
+        ],
+        "load_sources": [
+          36,
+          54
+        ],
+        "source_from_document": [
+          57,
+          60
+        ],
+        "format_sources": [
+          63,
+          69
+        ]
+      }
+    },
+    "structured_output.py": {
+      "sha256": "33fed53661c0adab1fa918e0e4bdd1933bcd3c867e7b9f76a29c9a749017d75e",
+      "lines": 157,
+      "symbols": {
+        "response_format_is_unavailable": [
+          18,
+          24
+        ],
+        "result_tools": [
+          27,
+          32
+        ],
+        "structured_protocols": [
+          35,
+          39
+        ],
+        "request_structured": [
+          42,
+          65
+        ],
+        "request_streamed": [
+          68,
+          105
+        ],
+        "request_streamed.emit": [
+          73,
+          76
+        ],
+        "request_streamed.send": [
+          78,
+          84
+        ],
+        "request_tool_result": [
+          108,
+          144
+        ],
+        "checked_message": [
+          147,
+          157
+        ]
+      }
+    },
+    "table_reading.py": {
+      "sha256": "4d0cb9bf21e965e14ca32e58cc648f69936409408a4144aedf7b71adab257bea",
+      "lines": 60,
+      "symbols": {
+        "table_rows": [
+          6,
+          27
+        ],
+        "visible_table_coverage": [
+          30,
+          60
+        ]
+      }
+    },
+    "test_agent_admission.py": {
+      "sha256": "d136f8708ac2fffc99d188499911e17edaec1d7bc43ed1c90f5da921fb89a78a",
+      "lines": 134,
+      "symbols": {
+        "WorkerTests": [
+          17,
+          85
+        ],
+        "WorkerTests.asyncSetUp": [
+          18,
+          21
+        ],
+        "WorkerTests.asyncTearDown": [
+          23,
+          25
+        ],
+        "WorkerTests.blocked": [
+          27,
+          30
+        ],
+        "WorkerTests.test_json_blocks_sse_without_executor_backlog": [
+          32,
+          42
+        ],
+        "WorkerTests.test_detached_sse_blocks_json_until_real_work_exits": [
+          44,
+          56
+        ],
+        "WorkerTests.test_detached_sse_blocks_json_until_real_work_exits.action": [
+          45,
+          47
+        ],
+        "WorkerTests.test_cancelled_json_await_does_not_release_actual_worker": [
+          58,
+          69
+        ],
+        "WorkerTests.test_exception_preserves_status_and_releases_slot": [
+          71,
+          77
+        ],
+        "WorkerTests.test_exception_preserves_status_and_releases_slot.action": [
+          72,
+          73
+        ],
+        "WorkerTests.test_shutdown_rejects_both_entry_types": [
+          79,
+          85
+        ],
+        "ApiTests": [
+          88,
+          130
+        ],
+        "ApiTests.test_worker_configuration_rejects_bad_limits": [
+          89,
+          93
+        ],
+        "ApiTests.test_real_routes_share_worker_but_schema_and_health_still_work": [
+          95,
+          130
+        ]
+      }
+    },
+    "test_agent_cancellation.py": {
+      "sha256": "60692dfb6b8ad50ec7a30778d64f95d7477a853200e652b70646b90a9270c3ec",
+      "lines": 352,
+      "symbols": {
+        "Model": [
+          21,
+          71
+        ],
+        "Model.log_message": [
+          24,
+          25
+        ],
+        "Model.do_POST": [
+          27,
+          71
+        ],
+        "TransportTests": [
+          74,
+          180
+        ],
+        "TransportTests.setUp": [
+          75,
+          81
+        ],
+        "TransportTests.tearDown": [
+          83,
+          86
+        ],
+        "TransportTests.request": [
+          88,
+          91
+        ],
+        "TransportTests.cancelled": [
+          93,
+          107
+        ],
+        "TransportTests.cancelled.work": [
+          95,
+          97
+        ],
+        "TransportTests.test_cancel_during_response_header_wait": [
+          109,
+          110
+        ],
+        "TransportTests.test_cancel_during_partial_response_body": [
+          112,
+          113
+        ],
+        "TransportTests.test_sdk_success_and_compressed_response_are_unchanged": [
+          115,
+          119
+        ],
+        "TransportTests.test_structured_output_parsing_still_works": [
+          121,
+          130
+        ],
+        "TransportTests.test_structured_output_parsing_still_works.Answer": [
+          123,
+          124
+        ],
+        "TransportTests.test_cancel_before_call_never_opens_model_connection": [
+          132,
+          137
+        ],
+        "TransportTests.test_context_is_restored_and_cli_keeps_original_transport": [
+          139,
+          147
+        ],
+        "TransportTests.test_provider_structured_fallback_works_over_new_transport": [
+          149,
+          159
+        ],
+        "TransportTests.test_provider_structured_fallback_works_over_new_transport.Answer": [
+          152,
+          153
+        ],
+        "TransportTests.test_cancelling_one_exchange_does_not_cancel_another_worker": [
+          161,
+          180
+        ],
+        "TransportTests.test_cancelling_one_exchange_does_not_cancel_another_worker.work": [
+          163,
+          165
+        ],
+        "WorkerCancellationTests": [
+          183,
+          330
+        ],
+        "WorkerCancellationTests.test_sse_response_start_failure_cancels_before_iterator_starts": [
+          184,
+          206
+        ],
+        "WorkerCancellationTests.test_sse_response_start_failure_cancels_before_iterator_starts.work": [
+          188,
+          195
+        ],
+        "WorkerCancellationTests.test_sse_response_start_failure_cancels_before_iterator_starts.send": [
+          196,
+          197
+        ],
+        "WorkerCancellationTests.test_sse_response_start_failure_cancels_before_iterator_starts.receive": [
+          198,
+          199
+        ],
+        "WorkerCancellationTests.test_disconnect_after_result_queued_still_cancels_title_work": [
+          208,
+          229
+        ],
+        "WorkerCancellationTests.test_disconnect_after_result_queued_still_cancels_title_work.title": [
+          211,
+          218
+        ],
+        "WorkerCancellationTests.test_disconnect_after_result_queued_still_cancels_title_work.action": [
+          219,
+          221
+        ],
+        "WorkerCancellationTests.test_cancel_before_worker_start_resolves_sse_preheader_waiter": [
+          231,
+          243
+        ],
+        "WorkerCancellationTests.test_cancel_before_worker_start_resolves_sse_preheader_waiter.cancel_before_submit": [
+          234,
+          236
+        ],
+        "WorkerCancellationTests.test_cancellation_does_not_release_slot_before_cleanup": [
+          245,
+          273
+        ],
+        "WorkerCancellationTests.test_cancellation_does_not_release_slot_before_cleanup.work": [
+          248,
+          256
+        ],
+        "WorkerCancellationTests.test_disconnected_request_cancels_cooperative_json_work": [
+          275,
+          292
+        ],
+        "WorkerCancellationTests.test_disconnected_request_cancels_cooperative_json_work.Request": [
+          278,
+          280
+        ],
+        "WorkerCancellationTests.test_disconnected_request_cancels_cooperative_json_work.Request.is_disconnected": [
+          279,
+          280
+        ],
+        "WorkerCancellationTests.test_disconnected_request_cancels_cooperative_json_work.action": [
+          281,
+          285
+        ],
+        "WorkerCancellationTests.test_closing_sse_cancels_work_and_skips_title": [
+          294,
+          312
+        ],
+        "WorkerCancellationTests.test_closing_sse_cancels_work_and_skips_title.work": [
+          297,
+          304
+        ],
+        "WorkerCancellationTests.test_lifespan_requests_cancellation_and_drains_actual_work": [
+          314,
+          330
+        ],
+        "WorkerCancellationTests.test_lifespan_requests_cancellation_and_drains_actual_work.work": [
+          317,
+          321
+        ],
+        "SignatureTests": [
+          333,
+          348
+        ],
+        "SignatureTests.test_request_injection_preserves_schema_and_background_tasks": [
+          334,
+          348
+        ],
+        "SignatureTests.test_request_injection_preserves_schema_and_background_tasks.work": [
+          339,
+          340
+        ]
+      }
+    },
+    "test_agent_governance.py": {
+      "sha256": "4f8d6382dff3f9e56a5121387ddf78a274f5faa652e5000b8480ef1a9b1d41dd",
+      "lines": 332,
+      "symbols": {
+        "wait_for": [
+          23,
+          30
+        ],
+        "TitleStore": [
+          33,
+          56
+        ],
+        "TitleStore.__init__": [
+          34,
+          37
+        ],
+        "TitleStore.get_conversation": [
+          39,
+          40
+        ],
+        "TitleStore.opening_messages": [
+          42,
+          43
+        ],
+        "TitleStore.claim_title": [
+          45,
+          48
+        ],
+        "TitleStore.assert_dependencies": [
+          50,
+          51
+        ],
+        "TitleStore.publish_title": [
+          53,
+          56
+        ],
+        "WorkerGovernanceTests": [
+          59,
+          190
+        ],
+        "WorkerGovernanceTests.setUp": [
+          60,
+          63
+        ],
+        "WorkerGovernanceTests.tearDown": [
+          65,
+          67
+        ],
+        "WorkerGovernanceTests.held": [
+          69,
+          70
+        ],
+        "WorkerGovernanceTests.test_reserved_is_distinct_from_running_and_snapshot_has_no_identity": [
+          72,
+          83
+        ],
+        "WorkerGovernanceTests.test_title_deduplication_is_bounded_and_leaves_request_capacity": [
+          85,
+          107
+        ],
+        "WorkerGovernanceTests.test_title_deduplication_is_bounded_and_leaves_request_capacity.generate": [
+          87,
+          90
+        ],
+        "WorkerGovernanceTests.test_at_most_one_title_runs_even_for_different_conversations": [
+          109,
+          121
+        ],
+        "WorkerGovernanceTests.test_at_most_one_title_runs_even_for_different_conversations.generate": [
+          110,
+          113
+        ],
+        "WorkerGovernanceTests.test_full_capacity_skips_title_without_claim_or_executor_backlog": [
+          123,
+          132
+        ],
+        "WorkerGovernanceTests.test_failed_title_has_cooldown_and_retry_is_not_retained_in_memory": [
+          134,
+          143
+        ],
+        "WorkerGovernanceTests.test_manual_title_is_preserved_without_model_call": [
+          145,
+          152
+        ],
+        "WorkerGovernanceTests.test_actual_error_and_business_failure_are_both_counted": [
+          154,
+          164
+        ],
+        "WorkerGovernanceTests.test_actual_error_and_business_failure_are_both_counted.failing": [
+          155,
+          156
+        ],
+        "WorkerGovernanceTests.test_submit_failure_does_not_leak_reserved_capacity": [
+          166,
+          171
+        ],
+        "WorkerGovernanceTests.test_cancel_request_is_not_reported_as_observed_cancellation": [
+          173,
+          190
+        ],
+        "WorkerGovernanceTests.test_cancel_request_is_not_reported_as_observed_cancellation.uncooperative": [
+          176,
+          179
+        ],
+        "SseTitleTests": [
+          193,
+          218
+        ],
+        "SseTitleTests.test_sse_title_starts_after_request_releases_single_worker": [
+          194,
+          218
+        ],
+        "SseTitleTests.test_sse_title_starts_after_request_releases_single_worker.generate": [
+          198,
+          201
+        ],
+        "SseTitleTests.test_sse_title_starts_after_request_releases_single_worker.action": [
+          202,
+          204
+        ],
+        "DetachedApiTests": [
+          221,
+          328
+        ],
+        "DetachedApiTests.setUp": [
+          222,
+          233
+        ],
+        "DetachedApiTests.tearDown": [
+          235,
+          241
+        ],
+        "DetachedApiTests.stats": [
+          243,
+          246
+        ],
+        "DetachedApiTests.blocked": [
+          250,
+          257
+        ],
+        "DetachedApiTests.prepare_block": [
+          259,
+          262
+        ],
+        "DetachedApiTests.submit": [
+          264,
+          265
+        ],
+        "DetachedApiTests.test_202_returns_while_actual_background_slot_remains_held": [
+          267,
+          278
+        ],
+        "DetachedApiTests.test_duplicate_submission_does_not_launch_another_worker": [
+          280,
+          290
+        ],
+        "DetachedApiTests.test_full_pool_rejects_before_creating_background_records": [
+          292,
+          301
+        ],
+        "DetachedApiTests.test_invalid_scope_releases_preparation_reservation": [
+          303,
+          307
+        ],
+        "DetachedApiTests.test_pause_cancels_owned_worker_and_preserves_resumable_job": [
+          309,
+          317
+        ],
+        "DetachedApiTests.test_all_eight_submission_endpoints_keep_background_out_of_request_schema": [
+          319,
+          328
+        ]
+      }
+    },
+    "test_agent_loop.py": {
+      "sha256": "51b45900599414cb326a67e9c9e217e185ab34c6ff7f7e4911f9773070d4a3d4",
+      "lines": 249,
+      "symbols": {
+        "AgentLoopTests": [
+          16,
+          245
+        ],
+        "AgentLoopTests.setUp": [
+          17,
+          26
+        ],
+        "AgentLoopTests.completion": [
+          29,
+          35
+        ],
+        "AgentLoopTests.call": [
+          38,
+          42
+        ],
+        "AgentLoopTests.run_script": [
+          44,
+          54
+        ],
+        "AgentLoopTests.run_script.make_client": [
+          47,
+          48
+        ],
+        "AgentLoopTests.test_search_then_read_then_grounded_answer_uses_only_visible_lines": [
+          56,
+          96
+        ],
+        "AgentLoopTests.test_search_then_read_then_grounded_answer_uses_only_visible_lines.respond": [
+          59,
+          90
+        ],
+        "AgentLoopTests.test_tool_error_is_returned_to_model_then_retry_succeeds": [
+          98,
+          126
+        ],
+        "AgentLoopTests.test_tool_error_is_returned_to_model_then_retry_succeeds.respond": [
+          101,
+          121
+        ],
+        "AgentLoopTests.test_budget_stops_tools_and_final_citation_cannot_use_unseen_lines": [
+          128,
+          149
+        ],
+        "AgentLoopTests.test_budget_stops_tools_and_final_citation_cannot_use_unseen_lines.respond": [
+          131,
+          144
+        ],
+        "AgentLoopTests.test_no_tool_call_allows_strict_insufficient_answer": [
+          151,
+          164
+        ],
+        "AgentLoopTests.test_no_tool_call_allows_strict_insufficient_answer.respond": [
+          152,
+          158
+        ],
+        "AgentLoopTests.test_selected_lines_are_visible_before_tools_and_in_final_answer": [
+          166,
+          193
+        ],
+        "AgentLoopTests.test_selected_lines_are_visible_before_tools_and_in_final_answer.respond": [
+          170,
+          185
+        ],
+        "AgentLoopTests.test_focus_validates_source_lines_and_context_limit": [
+          195,
+          201
+        ],
+        "AgentLoopTests.test_general_answer_does_not_load_embedding_model_or_search": [
+          203,
+          221
+        ],
+        "AgentLoopTests.test_general_answer_does_not_load_embedding_model_or_search.respond": [
+          205,
+          215
+        ],
+        "AgentLoopTests.test_model_can_read_missing_evidence_without_semantic_search": [
+          223,
+          245
+        ],
+        "AgentLoopTests.test_model_can_read_missing_evidence_without_semantic_search.respond": [
+          226,
+          241
+        ]
+      }
+    },
+    "test_agent_sse.py": {
+      "sha256": "f3702627c097bd6e68b961eb0842bebd4b75635cc057732958c4a86e2a80f4ea",
+      "lines": 187,
+      "symbols": {
+        "events": [
+          19,
+          25
+        ],
+        "BridgeTests": [
+          28,
+          95
+        ],
+        "BridgeTests.test_full_queue_has_reserved_error_and_done": [
+          29,
+          37
+        ],
+        "BridgeTests.test_result_limit_reports_saved_result_transport_failure": [
+          39,
+          44
+        ],
+        "BridgeTests.test_progress_size_and_total_limits": [
+          46,
+          52
+        ],
+        "BridgeTests.test_heartbeat_and_generator_close": [
+          54,
+          61
+        ],
+        "BridgeTests.test_disconnect_does_not_release_running_worker": [
+          63,
+          82
+        ],
+        "BridgeTests.test_disconnect_does_not_release_running_worker.action": [
+          67,
+          71
+        ],
+        "BridgeTests.test_admission_error_keeps_http_status_and_releases_slot": [
+          84,
+          95
+        ],
+        "BridgeTests.test_admission_error_keeps_http_status_and_releases_slot.reject": [
+          86,
+          87
+        ],
+        "StreamApiTests": [
+          98,
+          183
+        ],
+        "StreamApiTests.setUp": [
+          99,
+          113
+        ],
+        "StreamApiTests.tearDown": [
+          115,
+          119
+        ],
+        "StreamApiTests.test_result_is_persisted_and_replay_does_not_rerun_agent": [
+          121,
+          134
+        ],
+        "StreamApiTests.test_failure_is_safe_and_persistent": [
+          136,
+          142
+        ],
+        "StreamApiTests.test_invalid_scope_is_http_error_without_new_turn": [
+          144,
+          147
+        ],
+        "StreamApiTests.test_failed_turn_can_retry_as_stream_without_creating_another_turn": [
+          149,
+          168
+        ],
+        "StreamApiTests.test_failed_turn_can_retry_as_stream_without_creating_another_turn.answer": [
+          157,
+          159
+        ],
+        "StreamApiTests.test_missing_conversation_and_schema_are_http_errors": [
+          170,
+          173
+        ],
+        "StreamApiTests.test_busy_conversation_is_http_409_before_meta": [
+          175,
+          179
+        ],
+        "StreamApiTests.test_health_does_not_call_model": [
+          181,
+          183
+        ]
+      }
+    },
+    "test_answer_stream.py": {
+      "sha256": "58a707d3a02b992c9fe8ae647b57488091524142125f38613f075ab7ea50f1ae",
+      "lines": 152,
+      "symbols": {
+        "Result": [
+          17,
+          18
+        ],
+        "StreamingTests": [
+          21,
+          128
+        ],
+        "StreamingTests.setUp": [
+          22,
+          78
+        ],
+        "StreamingTests.setUp.Handler": [
+          29,
+          71
+        ],
+        "StreamingTests.setUp.Handler.log_message": [
+          30,
+          31
+        ],
+        "StreamingTests.setUp.Handler.do_POST": [
+          33,
+          71
+        ],
+        "StreamingTests.tearDown": [
+          80,
+          83
+        ],
+        "StreamingTests.test_native_text_arrives_before_final_response": [
+          85,
+          93
+        ],
+        "StreamingTests.test_tool_compatibility_fallback_stays_streaming": [
+          95,
+          102
+        ],
+        "StreamingTests.test_cancel_interrupts_blocked_stream_read": [
+          104,
+          120
+        ],
+        "StreamingTests.test_cancel_interrupts_blocked_stream_read.delta": [
+          108,
+          113
+        ],
+        "StreamingTests.test_cancel_interrupts_blocked_stream_read.delta.cancel": [
+          110,
+          112
+        ],
+        "StreamingTests.test_unexpected_result_tool_never_exposes_arguments": [
+          122,
+          128
+        ],
+        "TextTests": [
+          131,
+          148
+        ],
+        "TextTests.test_every_fragment_boundary_escapes_and_multiple_blocks": [
+          132,
+          137
+        ],
+        "TextTests.test_character_at_a_time_emits_before_string_closes": [
+          139,
+          142
+        ],
+        "TextTests.test_large_upstream_fragment_produces_bounded_delta_events": [
+          144,
+          148
+        ]
+      }
+    },
+    "test_answers.py": {
+      "sha256": "a99ad69613064040ff16b5c9d0be92d5b72b3e4df9dfb3060145d02e9aadfede",
+      "lines": 72,
+      "symbols": {
+        "payload": [
+          12,
+          17
+        ],
+        "AnswersTests": [
+          20,
+          68
+        ],
+        "AnswersTests.test_grounded_and_inference_with_real_ranges": [
+          21,
+          26
+        ],
+        "AnswersTests.test_supplement_when_no_evidence_and_strict_rejection": [
+          28,
+          36
+        ],
+        "AnswersTests.test_mixed_answer": [
+          38,
+          42
+        ],
+        "AnswersTests.test_wrong_document_or_line": [
+          44,
+          47
+        ],
+        "AnswersTests.test_contract_contradictions": [
+          49,
+          62
+        ],
+        "AnswersTests.test_strict_schema": [
+          64,
+          68
+        ]
+      }
+    },
+    "test_chunking.py": {
+      "sha256": "5ec2746ee9ac9ad76494868374ae1635ec3c9d7e0ea601e74bfe3bcea15fa674",
+      "lines": 100,
+      "symbols": {
+        "ChunkingTests": [
+          8,
+          96
+        ],
+        "ChunkingTests.split": [
+          9,
+          10
+        ],
+        "ChunkingTests.test_ranges_cover_original_nonblank_lines_once": [
+          12,
+          21
+        ],
+        "ChunkingTests.test_code_table_list_and_quote_stay_whole": [
+          23,
+          36
+        ],
+        "ChunkingTests.test_setext_and_sibling_headings": [
+          38,
+          40
+        ],
+        "ChunkingTests.test_identity_and_no_heading": [
+          42,
+          49
+        ],
+        "ChunkingTests.test_empty_and_invalid_budget": [
+          51,
+          55
+        ],
+        "ChunkingTests.test_dense_headings_merge_without_losing_sections_or_source_positions": [
+          57,
+          67
+        ],
+        "ChunkingTests.test_merge_does_not_exceed_max_or_force_merge_two_large_chunks": [
+          69,
+          76
+        ],
+        "ChunkingTests.test_small_tail_merges_backwards_including_blank_gap": [
+          78,
+          85
+        ],
+        "ChunkingTests.test_minimum_does_not_split_oversized_code_or_drop_small_document": [
+          87,
+          96
+        ]
+      }
+    },
+    "test_cli.py": {
+      "sha256": "fc61e2ffed627880fce1909f9ff48c7086a47b5fa5a491c9b294a7f6698f68cf",
+      "lines": 223,
+      "symbols": {
+        "CliTests": [
+          14,
+          219
+        ],
+        "CliTests.run_cli": [
+          15,
+          19
+        ],
+        "CliTests.test_default_preview": [
+          21,
+          24
+        ],
+        "CliTests.test_chunk_preview_is_offline_and_preserves_line_numbers": [
+          26,
+          36
+        ],
+        "CliTests.test_invalid_chunk_options": [
+          38,
+          40
+        ],
+        "CliTests.test_invalid_search_options": [
+          42,
+          52
+        ],
+        "CliTests.test_focus_loads_selected_note_and_passes_original_context_to_agent": [
+          54,
+          88
+        ],
+        "CliTests.test_focus_loads_selected_note_and_passes_original_context_to_agent.Output": [
+          59,
+          61
+        ],
+        "CliTests.test_focus_loads_selected_note_and_passes_original_context_to_agent.Output.reconfigure": [
+          60,
+          61
+        ],
+        "CliTests.test_agent_mode_passes_budget_and_displays_trace": [
+          90,
+          113
+        ],
+        "CliTests.test_agent_mode_passes_budget_and_displays_trace.Output": [
+          95,
+          97
+        ],
+        "CliTests.test_agent_mode_passes_budget_and_displays_trace.Output.reconfigure": [
+          96,
+          97
+        ],
+        "CliTests.test_rag_passes_only_retrieved_chunks_and_strict_flag": [
+          115,
+          148
+        ],
+        "CliTests.test_rag_passes_only_retrieved_chunks_and_strict_flag.Output": [
+          119,
+          121
+        ],
+        "CliTests.test_rag_passes_only_retrieved_chunks_and_strict_flag.Output.reconfigure": [
+          120,
+          121
+        ],
+        "CliTests.test_search_wires_embeddings_to_ranked_original_text": [
+          150,
+          184
+        ],
+        "CliTests.test_search_wires_embeddings_to_ranked_original_text.Output": [
+          153,
+          155
+        ],
+        "CliTests.test_search_wires_embeddings_to_ranked_original_text.Output.reconfigure": [
+          154,
+          155
+        ],
+        "CliTests.test_invalid_index_options": [
+          186,
+          188
+        ],
+        "CliTests.test_chunk_min_and_embedding_arguments": [
+          190,
+          202
+        ],
+        "CliTests.test_multiple_sources_and_strict_flag": [
+          204,
+          212
+        ],
+        "CliTests.test_missing_input_and_blank_question": [
+          214,
+          219
+        ]
+      }
+    },
+    "test_context.py": {
+      "sha256": "8a1f070dab50f839a7ca4f21599f4de734756242bd79740bb86ea4b300846a38",
+      "lines": 63,
+      "symbols": {
+        "ContextTests": [
+          11,
+          59
+        ],
+        "ContextTests.setUp": [
+          12,
+          15
+        ],
+        "ContextTests.answer": [
+          17,
+          24
+        ],
+        "ContextTests.test_context_contains_only_selected_original_lines": [
+          26,
+          32
+        ],
+        "ContextTests.test_forged_or_stale_chunks_fail": [
+          34,
+          38
+        ],
+        "ContextTests.test_citations_must_not_cross_hidden_gaps_or_other_sources": [
+          40,
+          47
+        ],
+        "ContextTests.test_visible_range_union_allows_adjacency_and_overlap": [
+          49,
+          52
+        ],
+        "ContextTests.test_empty_retrieval_never_means_full_text": [
+          54,
+          59
+        ]
+      }
+    },
+    "test_conversation_memory.py": {
+      "sha256": "8f2a9519432a3718ee6dd8f2ebf0cc91d08b98c560f1f5c2f7f44d52666c205d",
+      "lines": 404,
+      "symbols": {
+        "FakeEmbedder": [
+          30,
+          42
+        ],
+        "FakeEmbedder.__init__": [
+          31,
+          32
+        ],
+        "FakeEmbedder.cache_profile": [
+          34,
+          35
+        ],
+        "FakeEmbedder.embed_chunks": [
+          37,
+          39
+        ],
+        "FakeEmbedder.embed_query": [
+          41,
+          42
+        ],
+        "MemoryTests": [
+          45,
+          400
+        ],
+        "MemoryTests.setUp": [
+          46,
+          56
+        ],
+        "MemoryTests.tearDown": [
+          58,
+          61
+        ],
+        "MemoryTests.completed": [
+          63,
+          66
+        ],
+        "MemoryTests.dep": [
+          68,
+          69
+        ],
+        "MemoryTests.memory": [
+          71,
+          72
+        ],
+        "MemoryTests.test_archived_old_history_eligible_and_restart_restore_list": [
+          74,
+          86
+        ],
+        "MemoryTests.test_numeric_chinese_terms_complete_segments_and_cached_vectors": [
+          88,
+          100
+        ],
+        "MemoryTests.test_keyword_fallback_and_zero_unrelated_results": [
+          102,
+          108
+        ],
+        "MemoryTests.test_semantic_recall_without_literal_match_uses_injected_model": [
+          110,
+          113
+        ],
+        "MemoryTests.test_read_tool_bounds_neighbors_and_argument_validation": [
+          115,
+          127
+        ],
+        "MemoryTests.test_references_exact_visible_range_role_and_deleted_reference_endpoint": [
+          129,
+          147
+        ],
+        "MemoryTests.test_delete_cleans_original_summary_cache_and_is_idempotent": [
+          149,
+          165
+        ],
+        "MemoryTests.test_indirect_derived_replies_summaries_vectors_revoked_raw_user_preserved": [
+          167,
+          187
+        ],
+        "MemoryTests.test_inflight_delete_cross_chat_result_rejected_and_input_retryable": [
+          189,
+          202
+        ],
+        "MemoryTests.test_delete_active_generation_does_not_wait_for_os_lock_and_cannot_resurrect": [
+          204,
+          211
+        ],
+        "MemoryTests.test_embedding_deletion_race_does_not_restore_vectors": [
+          213,
+          225
+        ],
+        "MemoryTests.test_embedding_deletion_race_does_not_restore_vectors.encode": [
+          216,
+          218
+        ],
+        "MemoryTests.test_late_title_after_delete_is_discarded": [
+          227,
+          236
+        ],
+        "MemoryTests.test_late_title_after_delete_is_discarded.title": [
+          230,
+          232
+        ],
+        "MemoryTests.test_summary_generation_delete_and_revision_change_reject_late_publish": [
+          238,
+          249
+        ],
+        "MemoryTests.test_summary_generation_delete_and_revision_change_reject_late_publish.summary": [
+          243,
+          245
+        ],
+        "MemoryTests.test_web_persists_history_refs_retry_replay_and_revokes_saved_result": [
+          251,
+          285
+        ],
+        "MemoryTests.test_web_persists_history_refs_retry_replay_and_revokes_saved_result.respond": [
+          254,
+          266
+        ],
+        "MemoryTests.test_web_persists_history_refs_retry_replay_and_revokes_saved_result.client": [
+          267,
+          268
+        ],
+        "MemoryTests.test_history_final_request_budget_shrinks_actual_permissions": [
+          287,
+          303
+        ],
+        "MemoryTests.test_history_final_request_budget_shrinks_actual_permissions.respond": [
+          293,
+          299
+        ],
+        "MemoryTests.scripted": [
+          305,
+          314
+        ],
+        "MemoryTests.scripted.client": [
+          306,
+          307
+        ],
+        "MemoryTests.test_history_search_both_phases_same_background_ack_and_no_document_lookup": [
+          316,
+          339
+        ],
+        "MemoryTests.test_history_search_both_phases_same_background_ack_and_no_document_lookup.respond": [
+          319,
+          332
+        ],
+        "MemoryTests.test_general_chat_zero_tools_loads_no_history_embedding": [
+          341,
+          356
+        ],
+        "MemoryTests.test_general_chat_zero_tools_loads_no_history_embedding.respond": [
+          344,
+          350
+        ],
+        "MemoryTests.test_strict_schema_preserves_document_contract_and_history_cannot_ground_answer": [
+          358,
+          373
+        ],
+        "MemoryTests.test_strict_schema_preserves_document_contract_and_history_cannot_ground_answer.respond": [
+          363,
+          370
+        ],
+        "MemoryTests.test_budget_crop_revokes_history_reference_range": [
+          375,
+          386
+        ],
+        "MemoryTests.test_compat_fallback_checks_revocation_before_second_http_call": [
+          388,
+          400
+        ],
+        "MemoryTests.test_compat_fallback_checks_revocation_before_second_http_call.respond": [
+          393,
+          396
+        ]
+      }
+    },
+    "test_conversations.py": {
+      "sha256": "eedf7261b60ce5008ebe0d7873b9071e8c8ebc1839319d8808403bd8890a14e3",
+      "lines": 380,
+      "symbols": {
+        "completion": [
+          28,
+          30
+        ],
+        "answer_data": [
+          33,
+          35
+        ],
+        "ConversationTests": [
+          38,
+          290
+        ],
+        "ConversationTests.setUp": [
+          39,
+          50
+        ],
+        "ConversationTests.tearDown": [
+          52,
+          55
+        ],
+        "ConversationTests.completed": [
+          57,
+          64
+        ],
+        "ConversationTests.submit": [
+          66,
+          67
+        ],
+        "ConversationTests.test_create_rename_full_raw_history_pagination_and_restart_isolation": [
+          69,
+          85
+        ],
+        "ConversationTests.test_both_model_phases_receive_same_chat_background_without_search": [
+          87,
+          116
+        ],
+        "ConversationTests.test_both_model_phases_receive_same_chat_background_without_search.respond": [
+          90,
+          100
+        ],
+        "ConversationTests.test_both_model_phases_receive_same_chat_background_without_search.make_client": [
+          101,
+          102
+        ],
+        "ConversationTests.test_failure_duplicate_retry_and_completed_replay_save_once_without_learning": [
+          118,
+          136
+        ],
+        "ConversationTests.test_interrupt_recovery_and_skip_keep_input": [
+          138,
+          150
+        ],
+        "ConversationTests.test_same_conversation_concurrency_rejected_and_read_does_not_reset_live_turn": [
+          152,
+          174
+        ],
+        "ConversationTests.test_same_conversation_concurrency_rejected_and_read_does_not_reset_live_turn.slow": [
+          155,
+          158
+        ],
+        "ConversationTests.test_same_conversation_concurrency_rejected_and_read_does_not_reset_live_turn.worker": [
+          159,
+          160
+        ],
+        "ConversationTests.test_budget_and_stale_material_failures_keep_original_question": [
+          176,
+          189
+        ],
+        "ConversationTests.test_request_key_conflict_and_cross_chat_retry_rejected": [
+          191,
+          197
+        ],
+        "ConversationTests.long_history": [
+          199,
+          206
+        ],
+        "ConversationTests.summarizer": [
+          209,
+          216
+        ],
+        "ConversationTests.test_long_chat_summary_recent_turns_coverage_evidence_and_originals": [
+          218,
+          236
+        ],
+        "ConversationTests.test_summary_failure_preserves_old_version_and_all_raw_records": [
+          238,
+          250
+        ],
+        "ConversationTests.test_summary_failure_preserves_old_version_and_all_raw_records.fail": [
+          243,
+          244
+        ],
+        "ConversationTests.test_summary_rejects_forged_evidence_wrong_role_and_stale_publication": [
+          252,
+          268
+        ],
+        "ConversationTests.test_summary_requests_include_schema_budget_and_release_database_write_lock": [
+          270,
+          290
+        ],
+        "ConversationTests.test_summary_requests_include_schema_budget_and_release_database_write_lock.respond": [
+          274,
+          283
+        ],
+        "ConversationTests.test_summary_requests_include_schema_budget_and_release_database_write_lock.client": [
+          284,
+          285
+        ],
+        "RequestBudgetTests": [
+          293,
+          376
+        ],
+        "RequestBudgetTests.setUp": [
+          294,
+          295
+        ],
+        "RequestBudgetTests.test_agent_each_iteration_and_final_budget_shrink_citation_permissions": [
+          297,
+          331
+        ],
+        "RequestBudgetTests.test_agent_each_iteration_and_final_budget_shrink_citation_permissions.respond": [
+          302,
+          316
+        ],
+        "RequestBudgetTests.test_agent_each_iteration_and_final_budget_shrink_citation_permissions.client": [
+          317,
+          318
+        ],
+        "RequestBudgetTests.test_schema_itself_and_result_tool_fallback_are_counted": [
+          333,
+          348
+        ],
+        "RequestBudgetTests.test_schema_itself_and_result_tool_fallback_are_counted.respond": [
+          336,
+          343
+        ],
+        "RequestBudgetTests.test_explicit_selection_and_current_question_are_not_silently_cut": [
+          350,
+          366
+        ],
+        "RequestBudgetTests.test_early_long_message_recall_can_reach_exact_tail_with_small_allowance": [
+          368,
+          376
+        ]
+      }
+    },
+    "test_embeddings.py": {
+      "sha256": "f33e388a269fd4c8cd88a9a68cb5126762a8979e1c5fecffaaa8fd283f899167",
+      "lines": 151,
+      "symbols": {
+        "EmbeddingTests": [
+          13,
+          147
+        ],
+        "EmbeddingTests.setUp": [
+          14,
+          22
+        ],
+        "EmbeddingTests.test_role_prefixes_and_heading_context": [
+          24,
+          31
+        ],
+        "EmbeddingTests.test_no_silent_truncation": [
+          33,
+          39
+        ],
+        "EmbeddingTests.character_tokenizer": [
+          41,
+          48
+        ],
+        "EmbeddingTests.test_long_single_line_and_query_keep_all_text_in_bounded_windows": [
+          50,
+          65
+        ],
+        "EmbeddingTests.test_long_code_block_splits_into_exact_original_line_ranges": [
+          67,
+          79
+        ],
+        "EmbeddingTests.test_long_heading_is_encoded_completely_with_its_body": [
+          81,
+          87
+        ],
+        "EmbeddingTests.test_empty_inputs": [
+          89,
+          93
+        ],
+        "EmbeddingTests.test_loader_defaults_to_local_cpu_and_explicit_download": [
+          95,
+          105
+        ],
+        "EmbeddingTests.test_select_models_and_read_each_models_limit": [
+          107,
+          119
+        ],
+        "EmbeddingTests.test_custom_model_requires_input_conventions_and_valid_cap": [
+          121,
+          130
+        ],
+        "EmbeddingTests.test_no_prefix_model_and_merged_section_context": [
+          132,
+          147
+        ]
+      }
+    },
+    "test_evaluation.py": {
+      "sha256": "b5c3ca626bcb594a36c109940fee207558cc3cb8b2d0e00779a53dbb06e37a0d",
+      "lines": 215,
+      "symbols": {
+        "EvaluationTests": [
+          19,
+          211
+        ],
+        "EvaluationTests.setUp": [
+          20,
+          23
+        ],
+        "EvaluationTests.tearDown": [
+          25,
+          28
+        ],
+        "EvaluationTests.run_case": [
+          30,
+          31
+        ],
+        "EvaluationTests.test_default_validates_offline_without_provider_or_database": [
+          33,
+          37
+        ],
+        "EvaluationTests.test_versioned_inputs_and_reference_ranges_are_valid": [
+          39,
+          46
+        ],
+        "EvaluationTests.test_file_changes_invalidate_old_reference_version": [
+          48,
+          52
+        ],
+        "EvaluationTests.test_traversal_and_undeclared_relations_are_rejected": [
+          54,
+          60
+        ],
+        "EvaluationTests.test_smoke_runs_services_in_new_db_without_enrolling": [
+          62,
+          72
+        ],
+        "EvaluationTests.test_complete_protocol_budget_recorded_for_every_call": [
+          74,
+          82
+        ],
+        "EvaluationTests.test_live_request_has_no_reference_answers_or_relation_labels": [
+          84,
+          102
+        ],
+        "EvaluationTests.test_live_request_has_no_reference_answers_or_relation_labels.fake_live": [
+          87,
+          98
+        ],
+        "EvaluationTests.test_call_limit_preserves_completed_results_and_does_not_score_partial": [
+          104,
+          112
+        ],
+        "EvaluationTests.test_hierarchical_limit_retains_briefs_and_marks_partial_extraction": [
+          114,
+          124
+        ],
+        "EvaluationTests.test_provider_failure_redacted_and_saved_answers_survive": [
+          126,
+          135
+        ],
+        "EvaluationTests.test_service_rejects_invalid_citation_even_when_request_returned": [
+          137,
+          148
+        ],
+        "EvaluationTests.test_service_rejects_invalid_citation_even_when_request_returned.invalid": [
+          139,
+          143
+        ],
+        "EvaluationTests.test_forbidden_merges_and_unannotated_pairs_are_separate": [
+          150,
+          156
+        ],
+        "EvaluationTests.full_review": [
+          158,
+          166
+        ],
+        "EvaluationTests.test_smoke_never_emits_semantic_quality_ratios": [
+          168,
+          172
+        ],
+        "EvaluationTests.test_old_review_and_unknown_candidates_cannot_be_reused": [
+          174,
+          183
+        ],
+        "EvaluationTests.test_incomplete_pipeline_or_review_withholds_recall": [
+          185,
+          194
+        ],
+        "EvaluationTests.test_invalid_cli_call_count_is_not_silently_replaced": [
+          196,
+          199
+        ],
+        "EvaluationTests.test_review_command_writes_separate_artifact_without_model": [
+          201,
+          211
+        ]
+      }
+    },
+    "test_hybrid_retrieval.py": {
+      "sha256": "7d2c07315f078acee72b7a76d3a4ce183a4388c78b33849e5670ffa64dd8568f",
+      "lines": 275,
+      "symbols": {
+        "chunk": [
+          26,
+          27
+        ],
+        "HybridLexicalTests": [
+          30,
+          99
+        ],
+        "HybridLexicalTests.test_chinese_phrase_code_identifiers_and_nfkc": [
+          31,
+          38
+        ],
+        "HybridLexicalTests.test_bm25_known_term_frequency_math_and_no_zero_fill": [
+          40,
+          47
+        ],
+        "HybridLexicalTests.test_bm25_length_normalization_common_terms_and_empty_documents": [
+          49,
+          55
+        ],
+        "HybridLexicalTests.test_bm25_chinese_technical_query_matches_original_evidence": [
+          57,
+          62
+        ],
+        "HybridLexicalTests.test_rrf_uses_ranks_deduplicates_and_records_both_contributions": [
+          64,
+          71
+        ],
+        "HybridLexicalTests.test_rrf_empty_lexical_preserves_dense_and_scope_ties_are_stable": [
+          73,
+          79
+        ],
+        "HybridLexicalTests.test_rrf_rejects_alien_duplicate_conflicting_and_nonfinite_candidates": [
+          81,
+          87
+        ],
+        "HybridLexicalTests.test_invalid_parameters_and_real_candidate_limits": [
+          89,
+          99
+        ],
+        "HybridPipelineTests": [
+          102,
+          271
+        ],
+        "HybridPipelineTests.setUp": [
+          103,
+          105
+        ],
+        "HybridPipelineTests.tearDown": [
+          107,
+          108
+        ],
+        "HybridPipelineTests.test_actual_tool_dense_branch_trace_and_scoped_bm25_statistics": [
+          110,
+          133
+        ],
+        "HybridPipelineTests.test_query_failure_retained_no_partial_success_or_hidden_fallback": [
+          135,
+          145
+        ],
+        "HybridPipelineTests.test_repeated_scope_reuses_bm25_and_embeds_each_warm_query_once": [
+          147,
+          159
+        ],
+        "HybridPipelineTests.test_ranking_does_not_consume_labels": [
+          161,
+          171
+        ],
+        "HybridPipelineTests.test_prepared_evidence_mismatch_is_failure": [
+          173,
+          182
+        ],
+        "HybridPipelineTests.trace_pair": [
+          184,
+          197
+        ],
+        "HybridPipelineTests.trace_pair.PreparedEmbedder": [
+          188,
+          190
+        ],
+        "HybridPipelineTests.trace_pair.PreparedEmbedder.prepare_chunks": [
+          189,
+          190
+        ],
+        "HybridPipelineTests.test_unfrozen_comparison_no_quality_claims_and_invalid_runs_rejected": [
+          199,
+          214
+        ],
+        "HybridPipelineTests.test_frozen_comparison_real_beir_and_missing_query_zero": [
+          216,
+          230
+        ],
+        "HybridPipelineTests.test_compare_command_does_not_load_model": [
+          232,
+          245
+        ],
+        "HybridPipelineTests.test_hybrid_command_records_system_config_and_no_unfrozen_scores": [
+          247,
+          266
+        ],
+        "HybridPipelineTests.test_invalid_hybrid_parameters_fail_before_model_loading": [
+          268,
+          271
+        ]
+      }
+    },
+    "test_knowledge_tools.py": {
+      "sha256": "3150683bcab947a41098d2cc5f7b38bcce70cf3ace050c405c92027e52c838ee",
+      "lines": 106,
+      "symbols": {
+        "KnowledgeToolsTests": [
+          13,
+          102
+        ],
+        "KnowledgeToolsTests.setUp": [
+          14,
+          29
+        ],
+        "KnowledgeToolsTests.test_repeated_search_prepares_document_vectors_once": [
+          31,
+          40
+        ],
+        "KnowledgeToolsTests.test_search_result_exposes_source_identity_without_vectors": [
+          42,
+          49
+        ],
+        "KnowledgeToolsTests.test_search_validation": [
+          51,
+          55
+        ],
+        "KnowledgeToolsTests.test_read_source_uses_snapshot_and_exact_source_id": [
+          57,
+          66
+        ],
+        "KnowledgeToolsTests.test_read_validation_and_line_limit": [
+          68,
+          77
+        ],
+        "KnowledgeToolsTests.test_execute_dispatches_strict_arguments_and_reports_visible_chunks": [
+          79,
+          94
+        ],
+        "KnowledgeToolsTests.test_tool_definitions_match_dispatch_contract": [
+          96,
+          102
+        ]
+      }
+    },
+    "test_learning.py": {
+      "sha256": "60b012748c708a1b9ccdd29a037e7e5d96068fc815f1104e469f9733a6d43482",
+      "lines": 297,
+      "symbols": {
+        "learning": [
+          22,
+          29
+        ],
+        "learning_question": [
+          32,
+          33
+        ],
+        "LearningTests": [
+          36,
+          293
+        ],
+        "LearningTests.setUp": [
+          37,
+          40
+        ],
+        "LearningTests.tearDown": [
+          42,
+          43
+        ],
+        "LearningTests.create": [
+          45,
+          50
+        ],
+        "LearningTests.save": [
+          52,
+          56
+        ],
+        "LearningTests.enroll_completed": [
+          58,
+          61
+        ],
+        "LearningTests.test_opt_in_is_idempotent_and_does_not_invent_review_for_old_answer": [
+          63,
+          73
+        ],
+        "LearningTests.test_legacy_enrollment_extracts_general_criteria_without_rewriting_original_question": [
+          75,
+          90
+        ],
+        "LearningTests.test_enrollment_before_answer_counts_first_real_answer_and_retries_do_not_duplicate": [
+          92,
+          102
+        ],
+        "LearningTests.test_variant_and_original_share_target_but_each_answer_is_separate": [
+          104,
+          121
+        ],
+        "LearningTests.test_grouped_dimensions_have_independent_dates_and_source_grounding": [
+          123,
+          133
+        ],
+        "LearningTests.test_explicit_grouping_keeps_each_targets_own_source_snapshot": [
+          135,
+          148
+        ],
+        "LearningTests.test_uncertainty_invalid_scope_and_assistance_do_not_advance_schedule": [
+          150,
+          158
+        ],
+        "LearningTests.test_reference_disclosure_cannot_be_erased_by_answer_form": [
+          160,
+          167
+        ],
+        "LearningTests.test_semantic_grade_is_not_computed_from_point_counts_and_one_call_returns_feedback": [
+          169,
+          178
+        ],
+        "LearningTests.test_teaching_follow_up_contract_does_not_request_another_long_term_target": [
+          180,
+          189
+        ],
+        "LearningTests.test_follow_up_is_optional_and_does_not_count_as_second_scheduled_review": [
+          191,
+          203
+        ],
+        "LearningTests.test_user_revision_preserves_answer_original_grade_and_explicit_rating": [
+          205,
+          220
+        ],
+        "LearningTests.test_correction_replays_later_reviews_using_original_times_and_parameters": [
+          222,
+          245
+        ],
+        "LearningTests.test_legacy_answer_migration_keeps_grade_and_adds_one_revision": [
+          247,
+          260
+        ],
+        "LearningTests.test_pause_blocks_review_but_preserves_evidence": [
+          262,
+          269
+        ],
+        "LearningTests.test_api_enrollment_review_correction_and_rating_are_persistent": [
+          271,
+          293
+        ]
+      }
+    },
+    "test_library.py": {
+      "sha256": "97ec662cb3c7250aeb2e5d26a33257d0c722505bf2a5a5fbc6f1739f2d8aed60",
+      "lines": 251,
+      "symbols": {
+        "from_visible": [
+          28,
+          34
+        ],
+        "LibraryTests": [
+          37,
+          247
+        ],
+        "LibraryTests.setUp": [
+          38,
+          44
+        ],
+        "LibraryTests.tearDown": [
+          46,
+          49
+        ],
+        "LibraryTests.create_collection": [
+          51,
+          54
+        ],
+        "LibraryTests.import_document": [
+          56,
+          60
+        ],
+        "LibraryTests.practice": [
+          62,
+          64
+        ],
+        "LibraryTests.test_nested_collections_import_move_rename_and_restart": [
+          66,
+          79
+        ],
+        "LibraryTests.test_invalid_collection_and_empty_scope_have_no_generation_or_import": [
+          81,
+          91
+        ],
+        "LibraryTests.test_whole_document_and_more_than_200_selected_lines_no_search": [
+          93,
+          107
+        ],
+        "LibraryTests.test_collection_practice_scope_excludes_sibling_and_stays_opt_in": [
+          109,
+          121
+        ],
+        "LibraryTests.test_long_document_request_budget_and_visible_citations": [
+          123,
+          146
+        ],
+        "LibraryTests.test_long_document_request_budget_and_visible_citations.assess": [
+          141,
+          143
+        ],
+        "LibraryTests.test_plan_collection_opt_in_retry_move_and_review_preserve_schedule": [
+          148,
+          168
+        ],
+        "LibraryTests.test_existing_learning_database_migrates_without_replacing_records": [
+          170,
+          188
+        ],
+        "LibraryTests.completed_chat": [
+          190,
+          195
+        ],
+        "LibraryTests.test_auto_title_failure_retry_idempotency_and_manual_rename_wins": [
+          197,
+          225
+        ],
+        "LibraryTests.test_auto_title_failure_retry_idempotency_and_manual_rename_wins.user_renames": [
+          209,
+          211
+        ],
+        "LibraryTests.test_empty_chat_not_named_and_api_names_only_after_answer_saved": [
+          227,
+          247
+        ],
+        "LibraryTests.test_empty_chat_not_named_and_api_names_only_after_answer_saved.title": [
+          236,
+          238
+        ]
+      }
+    },
+    "test_management_chat_practice.py": {
+      "sha256": "7e18fb66251c6c5904b29a8098c9d79fd7845b29b76ba8f9f4f25e5fd1460ada",
+      "lines": 392,
+      "symbols": {
+        "discussion_question": [
+          25,
+          34
+        ],
+        "discussion_grade": [
+          37,
+          42
+        ],
+        "ManagementAndChatPracticeTests": [
+          45,
+          388
+        ],
+        "ManagementAndChatPracticeTests.setUp": [
+          46,
+          56
+        ],
+        "ManagementAndChatPracticeTests.tearDown": [
+          58,
+          61
+        ],
+        "ManagementAndChatPracticeTests.complete": [
+          63,
+          65
+        ],
+        "ManagementAndChatPracticeTests.generator": [
+          67,
+          78
+        ],
+        "ManagementAndChatPracticeTests.generate": [
+          80,
+          82
+        ],
+        "ManagementAndChatPracticeTests.imported": [
+          84,
+          87
+        ],
+        "ManagementAndChatPracticeTests.test_discussion_context_basis_and_opt_in_enrollment": [
+          89,
+          101
+        ],
+        "ManagementAndChatPracticeTests.test_generation_failure_retry_and_duplicate_publish": [
+          103,
+          115
+        ],
+        "ManagementAndChatPracticeTests.test_generation_failure_retry_and_duplicate_publish.failure": [
+          104,
+          105
+        ],
+        "ManagementAndChatPracticeTests.test_request_identity_rejects_changed_input": [
+          117,
+          121
+        ],
+        "ManagementAndChatPracticeTests.test_cancelled_discussion_question_keeps_request_retryable": [
+          123,
+          134
+        ],
+        "ManagementAndChatPracticeTests.test_cancelled_discussion_question_keeps_request_retryable.cancel": [
+          125,
+          126
+        ],
+        "ManagementAndChatPracticeTests.test_delete_during_generation_revokes_late_result": [
+          136,
+          144
+        ],
+        "ManagementAndChatPracticeTests.test_delete_during_generation_revokes_late_result.deleted": [
+          137,
+          140
+        ],
+        "ManagementAndChatPracticeTests.test_deleted_source_blocks_all_saved_exercise_paths_preserves_fsrs": [
+          146,
+          168
+        ],
+        "ManagementAndChatPracticeTests.test_delete_during_grading_does_not_save_feedback_or_event": [
+          170,
+          183
+        ],
+        "ManagementAndChatPracticeTests.test_delete_during_grading_does_not_save_feedback_or_event.removed": [
+          175,
+          177
+        ],
+        "ManagementAndChatPracticeTests.test_related_archived_chat_basis_revokes_transitively": [
+          185,
+          197
+        ],
+        "ManagementAndChatPracticeTests.test_original_review_variant_and_follow_up_keep_basis": [
+          199,
+          211
+        ],
+        "ManagementAndChatPracticeTests.test_follow_up_preserves_discussion_contract_and_only_one_review": [
+          213,
+          226
+        ],
+        "ManagementAndChatPracticeTests.test_over_budget_preserves_job_no_question": [
+          228,
+          234
+        ],
+        "ManagementAndChatPracticeTests.test_collection_cycle_rejected_and_delete_moves_content": [
+          236,
+          250
+        ],
+        "ManagementAndChatPracticeTests.test_replace_has_stable_identity_new_version_and_restart_recovery": [
+          252,
+          267
+        ],
+        "ManagementAndChatPracticeTests.test_remove_revokes_catalog_scope_and_late_answer_publish": [
+          269,
+          280
+        ],
+        "ManagementAndChatPracticeTests.test_strict_chat_question_uses_only_actual_document_ranges": [
+          282,
+          298
+        ],
+        "ManagementAndChatPracticeTests.test_strict_chat_question_uses_only_actual_document_ranges.generator": [
+          286,
+          292
+        ],
+        "ManagementAndChatPracticeTests.test_forged_history_range_and_document_claim_fail_without_saving": [
+          300,
+          310
+        ],
+        "ManagementAndChatPracticeTests.test_forged_history_range_and_document_claim_fail_without_saving.outside": [
+          301,
+          304
+        ],
+        "ManagementAndChatPracticeTests.test_source_removal_during_question_generation_blocks_save": [
+          312,
+          324
+        ],
+        "ManagementAndChatPracticeTests.test_source_removal_during_question_generation_blocks_save.replaced": [
+          317,
+          319
+        ],
+        "ManagementAndChatPracticeTests.test_outline_version_status_and_collection_removal_preserve_record": [
+          326,
+          344
+        ],
+        "ManagementAndChatPracticeTests.test_chat_job_api_retry_restores_same_session_after_reopen": [
+          346,
+          357
+        ],
+        "ManagementAndChatPracticeTests.test_collection_move_changes_ancestor_scopes_without_changing_file_identity": [
+          359,
+          367
+        ],
+        "ManagementAndChatPracticeTests.test_delete_doc_preserves_enrolled_source_snapshot_and_real_answer": [
+          369,
+          388
+        ]
+      }
+    },
+    "test_model_client.py": {
+      "sha256": "d7fde417c6b54a8431cb755db29adb15fb3f2b27d2328243e0b3548e20ad1f99",
+      "lines": 150,
+      "symbols": {
+        "ModelClientTests": [
+          15,
+          147
+        ],
+        "ModelClientTests.setUp": [
+          16,
+          17
+        ],
+        "ModelClientTests.run_response": [
+          19,
+          56
+        ],
+        "ModelClientTests.run_response.respond": [
+          20,
+          50
+        ],
+        "ModelClientTests.test_supplement_and_strict_insufficient_evidence": [
+          58,
+          64
+        ],
+        "ModelClientTests.test_invalid_json_structure_reports_clear_error": [
+          66,
+          68
+        ],
+        "ModelClientTests.test_fallback_keeps_messages_and_caches_successful_provider_capability": [
+          70,
+          107
+        ],
+        "ModelClientTests.test_fallback_keeps_messages_and_caches_successful_provider_capability.respond": [
+          74,
+          97
+        ],
+        "ModelClientTests.test_fallback_keeps_messages_and_caches_successful_provider_capability.make_client": [
+          99,
+          100
+        ],
+        "ModelClientTests.test_language_preference_reaches_model_and_invalid_language_makes_no_call": [
+          109,
+          115
+        ],
+        "ModelClientTests.test_truncation_reports_clear_error": [
+          117,
+          119
+        ],
+        "ModelClientTests.test_rag_http_request_excludes_hidden_lines_and_enforces_citations": [
+          121,
+          133
+        ],
+        "ModelClientTests.test_empty_retrieval_and_strict_mode": [
+          135,
+          141
+        ],
+        "ModelClientTests.test_invalid_context_fails_before_api_call": [
+          143,
+          147
+        ]
+      }
+    },
+    "test_outline_context.py": {
+      "sha256": "10ceda32ac39fd8176da1fd554606071420fd4e8c7534888e85ed07d5b3785e9",
+      "lines": 301,
+      "symbols": {
+        "controlled": [
+          27,
+          40
+        ],
+        "OutlineContextTests": [
+          43,
+          297
+        ],
+        "OutlineContextTests.setUp": [
+          44,
+          55
+        ],
+        "OutlineContextTests.tearDown": [
+          57,
+          60
+        ],
+        "OutlineContextTests.current": [
+          62,
+          63
+        ],
+        "OutlineContextTests.create": [
+          65,
+          70
+        ],
+        "OutlineContextTests.test_full_reading_uses_complete_document_schema_and_section_coverage": [
+          72,
+          82
+        ],
+        "OutlineContextTests.test_output_pressure_selects_hierarchy_even_with_large_input_capacity": [
+          84,
+          86
+        ],
+        "OutlineContextTests.test_shared_background_and_original_early_evidence_reach_later_extraction": [
+          88,
+          109
+        ],
+        "OutlineContextTests.test_shared_background_and_original_early_evidence_reach_later_extraction.capture": [
+          91,
+          93
+        ],
+        "OutlineContextTests.test_summary_failure_keeps_valid_steps_and_resumes_without_regeneration": [
+          111,
+          131
+        ],
+        "OutlineContextTests.test_summary_failure_keeps_valid_steps_and_resumes_without_regeneration.fail": [
+          114,
+          119
+        ],
+        "OutlineContextTests.test_fabricated_summary_pointer_is_rejected_before_extraction": [
+          133,
+          142
+        ],
+        "OutlineContextTests.test_pause_during_summary_has_no_long_write_lock_and_can_resume": [
+          144,
+          160
+        ],
+        "OutlineContextTests.test_pause_during_summary_has_no_long_write_lock_and_can_resume.pause": [
+          146,
+          149
+        ],
+        "OutlineContextTests.test_structural_windows_keep_tables_and_code_whole_when_they_fit": [
+          162,
+          169
+        ],
+        "OutlineContextTests.test_cross_chapter_citations_can_be_edited_and_enrolled_only_after_original_delivery": [
+          171,
+          187
+        ],
+        "OutlineContextTests.test_cross_chapter_citations_can_be_edited_and_enrolled_only_after_original_delivery.early_citation": [
+          173,
+          178
+        ],
+        "OutlineContextTests.test_actual_background_pressure_splits_batch_without_losing_tail": [
+          189,
+          199
+        ],
+        "OutlineContextTests.test_source_change_rejects_late_brief_publication": [
+          201,
+          209
+        ],
+        "OutlineContextTests.test_source_change_rejects_late_brief_publication.changed": [
+          203,
+          205
+        ],
+        "OutlineContextTests.test_real_request_pressure_splits_extraction_and_retains_all_original_lines": [
+          211,
+          230
+        ],
+        "OutlineContextTests.test_real_request_pressure_splits_extraction_and_retains_all_original_lines.verbose": [
+          216,
+          221
+        ],
+        "OutlineContextTests.test_reduction_is_hierarchical_and_all_leaf_dependencies_remain_readable": [
+          232,
+          243
+        ],
+        "OutlineContextTests.test_dead_context_worker_recovery_and_late_attempt_rejection": [
+          245,
+          259
+        ],
+        "OutlineContextTests.test_changed_dependency_version_prevents_stale_merge_publication": [
+          261,
+          274
+        ],
+        "OutlineContextTests.test_empty_markdown_completes_without_model_or_fake_source_range": [
+          276,
+          284
+        ],
+        "OutlineContextTests.test_superseded_failed_merge_can_be_used_again_after_budget_changes": [
+          286,
+          297
+        ]
+      }
+    },
+    "test_outline_groups.py": {
+      "sha256": "5bc0561d0a7da7fc078841d5cd2147da707473a9a81cd174d3bf53fdf322c475",
+      "lines": 353,
+      "symbols": {
+        "page_fixture": [
+          23,
+          24
+        ],
+        "OutlineGroupTests": [
+          27,
+          349
+        ],
+        "OutlineGroupTests.prepare": [
+          35,
+          50
+        ],
+        "OutlineGroupTests.decide": [
+          52,
+          55
+        ],
+        "OutlineGroupTests.enroll": [
+          57,
+          59
+        ],
+        "OutlineGroupTests.test_suggestions_preserve_evidence_versions_and_do_not_enroll": [
+          61,
+          74
+        ],
+        "OutlineGroupTests.test_distinct_dimensions_share_one_unit_and_keep_independent_targets_fsrs": [
+          76,
+          87
+        ],
+        "OutlineGroupTests.test_duplicates_keep_user_selected_representative_and_original_records": [
+          89,
+          101
+        ],
+        "OutlineGroupTests.test_duplicate_different_dimensions_and_unknown_ids_are_rejected": [
+          103,
+          112
+        ],
+        "OutlineGroupTests.test_uncertain_suggestion_cannot_be_accepted_and_rejection_is_idempotent": [
+          114,
+          120
+        ],
+        "OutlineGroupTests.test_review_edit_and_stale_browser_revision": [
+          122,
+          130
+        ],
+        "OutlineGroupTests.test_candidate_edit_invalidates_accepted_group_without_rewriting_old_plan": [
+          132,
+          141
+        ],
+        "OutlineGroupTests.test_approval_changed_during_initial_question_rolls_back_every_record": [
+          143,
+          156
+        ],
+        "OutlineGroupTests.test_approval_changed_during_initial_question_rolls_back_every_record.changed": [
+          147,
+          149
+        ],
+        "OutlineGroupTests.test_concurrent_first_targets_bind_same_unit_with_no_network_write_lock": [
+          158,
+          169
+        ],
+        "OutlineGroupTests.test_concurrent_first_targets_bind_same_unit_with_no_network_write_lock.nested": [
+          161,
+          164
+        ],
+        "OutlineGroupTests.test_fail_retry_and_repeated_delivery_publish_once": [
+          171,
+          188
+        ],
+        "OutlineGroupTests.test_changed_input_discards_late_grouping_and_requires_new_request": [
+          190,
+          204
+        ],
+        "OutlineGroupTests.test_changed_input_discards_late_grouping_and_requires_new_request.late": [
+          194,
+          198
+        ],
+        "OutlineGroupTests.test_recovery_and_restart_preserve_suggestions_and_originals": [
+          206,
+          211
+        ],
+        "OutlineGroupTests.test_abandoned_worker_recovered_and_concurrent_task_rejected": [
+          213,
+          225
+        ],
+        "OutlineGroupTests.test_complete_schema_budget_failure_does_not_truncate_candidates_or_call_model": [
+          227,
+          236
+        ],
+        "OutlineGroupTests.test_scope_change_prevents_publish_and_acceptance_http": [
+          238,
+          246
+        ],
+        "OutlineGroupTests.test_existing_unit_choice_keeps_prior_item_and_shared_source_snapshots": [
+          248,
+          260
+        ],
+        "OutlineGroupTests.test_overlap_acceptance_blocked_and_withdrawal_leaves_enrolled_items_untouched": [
+          262,
+          276
+        ],
+        "OutlineGroupTests.test_http_generate_review_refresh_and_duplicate_post": [
+          278,
+          312
+        ],
+        "OutlineGroupTests.test_forged_evidence_outside_original_visibility_is_not_sent_to_group_model": [
+          314,
+          326
+        ],
+        "OutlineGroupTests.test_first_seed_failure_does_not_bind_unit_and_retries_create_once": [
+          328,
+          338
+        ],
+        "OutlineGroupTests.test_database_failure_rolls_back_new_group_unit_and_seed_atomically": [
+          340,
+          349
+        ]
+      }
+    },
+    "test_outline_integration.py": {
+      "sha256": "d4cebdd7c4539f8234373a8764306bd9fb9bff8ad4d2b4f02b6a15ef8ea4e91c",
+      "lines": 364,
+      "symbols": {
+        "IntegrationTests": [
+          24,
+          360
+        ],
+        "IntegrationTests.setUp": [
+          25,
+          36
+        ],
+        "IntegrationTests.tearDown": [
+          38,
+          41
+        ],
+        "IntegrationTests.seed": [
+          43,
+          65
+        ],
+        "IntegrationTests.current": [
+          67,
+          68
+        ],
+        "IntegrationTests.begin": [
+          70,
+          71
+        ],
+        "IntegrationTests.model": [
+          73,
+          81
+        ],
+        "IntegrationTests.execute": [
+          83,
+          86
+        ],
+        "IntegrationTests.test_small_input_and_output_use_direct_with_receipt": [
+          88,
+          98
+        ],
+        "IntegrationTests.test_hierarchy_handles_distant_pairs_singletons_and_large_group": [
+          100,
+          113
+        ],
+        "IntegrationTests.test_input_pressure_routes_without_cutting_required_evidence": [
+          115,
+          129
+        ],
+        "IntegrationTests.test_input_pressure_routes_without_cutting_required_evidence.model": [
+          119,
+          121
+        ],
+        "IntegrationTests.test_output_pressure_alone_selects_hierarchy": [
+          131,
+          140
+        ],
+        "IntegrationTests.test_cards_preserve_full_conditions_and_never_publish_unverified_hypothesis": [
+          142,
+          157
+        ],
+        "IntegrationTests.test_cards_preserve_full_conditions_and_never_publish_unverified_hypothesis.model": [
+          147,
+          153
+        ],
+        "IntegrationTests.test_call_allowance_pause_restart_continue_reuses_completed_steps": [
+          159,
+          173
+        ],
+        "IntegrationTests.test_pause_discards_inflight_return_and_preserves_pending": [
+          175,
+          187
+        ],
+        "IntegrationTests.test_pause_discards_inflight_return_and_preserves_pending.pause": [
+          178,
+          181
+        ],
+        "IntegrationTests.test_missing_receipt_is_failure_not_independent_candidates": [
+          189,
+          195
+        ],
+        "IntegrationTests.test_deferred_work_automatically_continues_and_no_progress_is_bounded": [
+          197,
+          216
+        ],
+        "IntegrationTests.test_deferred_work_automatically_continues_and_no_progress_is_bounded.deferred": [
+          201,
+          206
+        ],
+        "IntegrationTests.test_deferred_work_automatically_continues_and_no_progress_is_bounded.no_progress": [
+          211,
+          213
+        ],
+        "IntegrationTests.test_explicit_truncation_splits_but_other_errors_do_not": [
+          218,
+          234
+        ],
+        "IntegrationTests.test_explicit_truncation_splits_but_other_errors_do_not.truncated": [
+          222,
+          226
+        ],
+        "IntegrationTests.test_nontransitive_relations_do_not_union_into_one_group": [
+          236,
+          245
+        ],
+        "IntegrationTests.test_version_change_during_request_rejects_old_step_and_retry": [
+          247,
+          258
+        ],
+        "IntegrationTests.test_version_change_during_request_rejects_old_step_and_retry.changed": [
+          250,
+          254
+        ],
+        "IntegrationTests.test_every_request_counts_complete_protocol_and_real_visibility": [
+          260,
+          272
+        ],
+        "IntegrationTests.test_legacy_null_plan_uses_original_contract": [
+          274,
+          282
+        ],
+        "IntegrationTests.test_hierarchy_pair_assignment_is_exact_and_not_adjacent_only": [
+          284,
+          290
+        ],
+        "IntegrationTests.test_unknown_duplicate_omitted_and_unprocessed_receipts_rejected": [
+          292,
+          300
+        ],
+        "IntegrationTests.test_full_suggestion_slots_revisit_unreported_comparisons": [
+          302,
+          314
+        ],
+        "IntegrationTests.test_full_suggestion_slots_revisit_unreported_comparisons.model": [
+          306,
+          310
+        ],
+        "IntegrationTests.test_large_duplicate_group_review_and_opt_in_keep_originals_and_single_item": [
+          316,
+          336
+        ],
+        "IntegrationTests.test_large_duplicate_group_review_and_opt_in_keep_originals_and_single_item.question": [
+          326,
+          329
+        ],
+        "IntegrationTests.test_dead_worker_recovery_preserves_completed_step": [
+          338,
+          349
+        ],
+        "IntegrationTests.test_http_pause_unknown_run_and_invalid_allowance": [
+          351,
+          360
+        ]
+      }
+    },
+    "test_outline_review.py": {
+      "sha256": "45a564a16d5b4dcb2b4049808cd7450772889fa11f8aa12f10679f2510ae1c0f",
+      "lines": 292,
+      "symbols": {
+        "SourceReviewTests": [
+          23,
+          289
+        ],
+        "SourceReviewTests.begin": [
+          33,
+          39
+        ],
+        "SourceReviewTests.read": [
+          41,
+          45
+        ],
+        "SourceReviewTests.conclude": [
+          47,
+          51
+        ],
+        "SourceReviewTests.execute": [
+          53,
+          56
+        ],
+        "SourceReviewTests.test_read_and_verdict_preserve_originals_and_require_user_adoption": [
+          58,
+          80
+        ],
+        "SourceReviewTests.test_locate_then_cross_source_read_only_actual_read_authorizes_citation": [
+          82,
+          93
+        ],
+        "SourceReviewTests.test_location_pointer_is_not_citable": [
+          95,
+          100
+        ],
+        "SourceReviewTests.test_two_read_rounds_cannot_execute_third_read": [
+          102,
+          112
+        ],
+        "SourceReviewTests.test_read_explanation_is_preserved_but_never_publishes_a_verdict": [
+          114,
+          121
+        ],
+        "SourceReviewTests.test_shared_allowance_pause_continue_resume_and_idempotence": [
+          123,
+          140
+        ],
+        "SourceReviewTests.test_failed_generation_keeps_reads_and_reuses_failed_step_identity": [
+          142,
+          150
+        ],
+        "SourceReviewTests.test_pause_during_request_revokes_late_result_and_releases_write_lock": [
+          152,
+          159
+        ],
+        "SourceReviewTests.test_pause_during_request_revokes_late_result_and_releases_write_lock.pause": [
+          154,
+          156
+        ],
+        "SourceReviewTests.test_edit_during_request_revokes_result": [
+          161,
+          169
+        ],
+        "SourceReviewTests.test_edit_during_request_revokes_result.edit": [
+          163,
+          166
+        ],
+        "SourceReviewTests.test_queued_source_change_fails_without_model_or_lost_input": [
+          171,
+          177
+        ],
+        "SourceReviewTests.test_changed_group_invalidates_paused_task_and_allows_new_version": [
+          179,
+          185
+        ],
+        "SourceReviewTests.test_budget_checks_schema_and_required_evidence_without_model": [
+          187,
+          193
+        ],
+        "SourceReviewTests.test_actual_full_requests_fit_both_protocols_and_diagnostics": [
+          195,
+          202
+        ],
+        "SourceReviewTests.test_block_boundary_trim_and_permissions": [
+          204,
+          214
+        ],
+        "SourceReviewTests.test_unknown_source_and_large_or_invalid_ranges": [
+          216,
+          220
+        ],
+        "SourceReviewTests.test_large_saved_group_does_not_inherit_page_output_member_limit": [
+          222,
+          230
+        ],
+        "SourceReviewTests.test_distinct_and_clarifications_do_not_create_learning_records": [
+          232,
+          237
+        ],
+        "SourceReviewTests.test_clarification_cannot_be_adopted_or_silently_edit_candidate": [
+          239,
+          246
+        ],
+        "SourceReviewTests.test_unresolved_can_include_nonbinding_clarifications_without_acceptance": [
+          248,
+          254
+        ],
+        "SourceReviewTests.test_duplicates_can_choose_other_representative_and_enroll_once": [
+          256,
+          261
+        ],
+        "SourceReviewTests.test_completed_review_stale_cannot_apply": [
+          263,
+          267
+        ],
+        "SourceReviewTests.test_recovery_processing_and_http_contract": [
+          269,
+          280
+        ],
+        "SourceReviewTests.test_web_background_wrapper_auto_reviews_needs_review_only": [
+          282,
+          289
+        ]
+      }
+    },
+    "test_outline_routes.py": {
+      "sha256": "e41acc5404f1f42fece09038a4147766dae153330f8b0573806185f7419efdc2",
+      "lines": 343,
+      "symbols": {
+        "controlled_route": [
+          23,
+          28
+        ],
+        "RouteTests": [
+          31,
+          340
+        ],
+        "RouteTests.begin": [
+          42,
+          45
+        ],
+        "RouteTests.complete": [
+          47,
+          51
+        ],
+        "RouteTests.public": [
+          53,
+          53
+        ],
+        "RouteTests.edges": [
+          55,
+          56
+        ],
+        "RouteTests.review": [
+          58,
+          60
+        ],
+        "RouteTests.answer": [
+          62,
+          67
+        ],
+        "RouteTests.test_scope_navigation_pair_coverage_budget_and_no_enrollment": [
+          69,
+          76
+        ],
+        "RouteTests.test_reject_uncertain_then_include_and_use_duplicate_canonical": [
+          78,
+          84
+        ],
+        "RouteTests.test_pending_duplicate_exclusion_then_representative_only": [
+          86,
+          91
+        ],
+        "RouteTests.test_schema_and_actual_evidence_validation": [
+          93,
+          105
+        ],
+        "RouteTests.test_budget_routes_by_output_and_rejects_minimum_insufficient": [
+          107,
+          112
+        ],
+        "RouteTests.test_accept_edit_skip_original_attribution_and_revision": [
+          114,
+          123
+        ],
+        "RouteTests.test_cycles_are_reviewable_but_cannot_accept_closing_edge": [
+          125,
+          132
+        ],
+        "RouteTests.test_uncertain_relation_needs_edit_to_accept": [
+          134,
+          138
+        ],
+        "RouteTests.test_manual_relationship_duplicate_and_recover_after_reopen": [
+          140,
+          148
+        ],
+        "RouteTests.test_order_conflict_allowed_skip_restore_no_fsrs_mutation": [
+          150,
+          156
+        ],
+        "RouteTests.test_order_strict_permutation_unknown_skip_and_cas": [
+          158,
+          163
+        ],
+        "RouteTests.test_request_idempotence_repeated_run_does_not_duplicate": [
+          165,
+          169
+        ],
+        "RouteTests.test_allowance_pause_and_continue_reuses_completed_pages": [
+          171,
+          179
+        ],
+        "RouteTests.test_failure_retry_keeps_complete_page_no_duplicate": [
+          181,
+          192
+        ],
+        "RouteTests.test_failure_retry_keeps_complete_page_no_duplicate.failing": [
+          183,
+          186
+        ],
+        "RouteTests.test_truncated_output_shrinks_without_publishing_partial": [
+          194,
+          202
+        ],
+        "RouteTests.test_truncated_output_shrinks_without_publishing_partial.truncated": [
+          196,
+          199
+        ],
+        "RouteTests.test_no_network_write_lock_pause_invalidates_late_result": [
+          204,
+          210
+        ],
+        "RouteTests.test_no_network_write_lock_pause_invalidates_late_result.late": [
+          206,
+          208
+        ],
+        "RouteTests.test_candidate_change_during_network_revokes_late_result": [
+          212,
+          219
+        ],
+        "RouteTests.test_candidate_change_during_network_revokes_late_result.changed": [
+          214,
+          217
+        ],
+        "RouteTests.test_scope_change_stale_no_recommend_or_edit": [
+          221,
+          224
+        ],
+        "RouteTests.test_unknown_pending_no_fake_due_enrollment_keeps_stamp": [
+          226,
+          230
+        ],
+        "RouteTests.test_current_effective_score_correction_changes_recommend_without_model": [
+          232,
+          240
+        ],
+        "RouteTests.test_hint_outside_scope_uncertain_are_insufficient_not_wrong": [
+          242,
+          247
+        ],
+        "RouteTests.test_followup_does_not_erase_primary_or_count_as_proof": [
+          249,
+          255
+        ],
+        "RouteTests.test_due_uses_actual_review_event_and_skip_does_not_pause_item": [
+          257,
+          265
+        ],
+        "RouteTests.test_accepted_prerequisite_is_soft_advice_with_user_order": [
+          267,
+          272
+        ],
+        "RouteTests.test_old_process_recovery_and_api_schema_errors": [
+          274,
+          283
+        ],
+        "RouteTests.test_http_complete_review_order_and_no_implicit_enrollment": [
+          285,
+          308
+        ],
+        "RouteTests.test_active_generation_is_explicitly_rejected": [
+          310,
+          316
+        ],
+        "RouteTests.test_single_target_finishes_without_a_model_call": [
+          318,
+          322
+        ],
+        "RouteTests.test_accepted_group_binding_on_enroll_keeps_route_but_decision_change_invalidates": [
+          324,
+          330
+        ],
+        "RouteTests.test_latest_hinted_attempt_does_not_reuse_old_support": [
+          332,
+          336
+        ],
+        "RouteTests.test_repeated_resumption_with_queued_job_does_not_increase_allowance": [
+          338,
+          340
+        ]
+      }
+    },
+    "test_outlines.py": {
+      "sha256": "a7482f8e2f2f586a2161b2fece18900252494479058006d49477c2f7fda68183",
+      "lines": 292,
+      "symbols": {
+        "proposal": [
+          30,
+          33
+        ],
+        "fake_model": [
+          36,
+          43
+        ],
+        "OutlineTests": [
+          46,
+          288
+        ],
+        "OutlineTests.setUp": [
+          47,
+          56
+        ],
+        "OutlineTests.tearDown": [
+          58,
+          62
+        ],
+        "OutlineTests.current": [
+          64,
+          65
+        ],
+        "OutlineTests.create": [
+          67,
+          71
+        ],
+        "OutlineTests.generated": [
+          73,
+          77
+        ],
+        "OutlineTests.counts": [
+          79,
+          82
+        ],
+        "OutlineTests.test_markdown_manifest_covers_every_line_once_and_ignores_embedded_headings": [
+          84,
+          90
+        ],
+        "OutlineTests.test_budget_windows_examine_entire_long_chapter_and_account_for_both_protocols": [
+          92,
+          101
+        ],
+        "OutlineTests.test_oversize_line_is_explicitly_unanalyzed_without_losing_following_lines": [
+          103,
+          109
+        ],
+        "OutlineTests.test_generation_is_opt_in_deduplicated_and_recovers_after_reopening": [
+          111,
+          121
+        ],
+        "OutlineTests.test_failure_keeps_prior_proposals_and_retry_only_reprocesses_remaining": [
+          123,
+          142
+        ],
+        "OutlineTests.test_failure_keeps_prior_proposals_and_retry_only_reprocesses_remaining.failing": [
+          126,
+          130
+        ],
+        "OutlineTests.test_invalid_citation_does_not_publish_model_proposals": [
+          144,
+          150
+        ],
+        "OutlineTests.test_edit_revision_and_immutable_evidence": [
+          152,
+          161
+        ],
+        "OutlineTests.test_selected_enrollment_is_atomic_idempotent_and_has_no_mastery_evidence": [
+          163,
+          176
+        ],
+        "OutlineTests.test_failed_seed_or_enrollment_rolls_back_all_rows_and_retry_succeeds": [
+          178,
+          190
+        ],
+        "OutlineTests.test_cancelled_seed_releases_enrollment_state_for_retry": [
+          192,
+          202
+        ],
+        "OutlineTests.test_changed_scope_blocks_enrollment_and_changes_during_generation_reject_publication": [
+          204,
+          218
+        ],
+        "OutlineTests.test_changed_scope_blocks_enrollment_and_changes_during_generation_reject_publication.change_during_request": [
+          213,
+          215
+        ],
+        "OutlineTests.test_locks_pause_stale_attempts_and_dead_worker_recovery": [
+          220,
+          247
+        ],
+        "OutlineTests.test_network_does_not_hold_database_write_lock_and_pause_keeps_completed_window": [
+          249,
+          264
+        ],
+        "OutlineTests.test_network_does_not_hold_database_write_lock_and_pause_keeps_completed_window.stop": [
+          251,
+          254
+        ],
+        "OutlineTests.test_http_nested_collection_empty_scope_and_corrected_hint": [
+          266,
+          288
+        ]
+      }
+    },
+    "test_pdf_documents.py": {
+      "sha256": "3acbf541f0532a94a544a3feb0a41ae5bf52e168d11c849eb2818320f58f914f",
+      "lines": 386,
+      "symbols": {
+        "setUpModule": [
+          31,
+          35
+        ],
+        "tearDownModule": [
+          38,
+          39
+        ],
+        "text_pdf": [
+          42,
+          58
+        ],
+        "scan_pdf": [
+          61,
+          70
+        ],
+        "DocumentStructureTests": [
+          73,
+          121
+        ],
+        "DocumentStructureTests.test_markdown_structure_preserves_original_identity_and_positions": [
+          74,
+          83
+        ],
+        "DocumentStructureTests.test_pdf_structure_has_real_tables_and_page_locations": [
+          85,
+          98
+        ],
+        "DocumentStructureTests.test_snapshot_validation_rejects_unmapped_ranges_and_assets": [
+          100,
+          104
+        ],
+        "DocumentStructureTests.test_scan_is_partial_and_does_not_invent_searchable_text": [
+          106,
+          111
+        ],
+        "DocumentStructureTests.test_invalid_and_encrypted_pdfs_are_explicit_errors": [
+          113,
+          121
+        ],
+        "TableWindowTests": [
+          124,
+          177
+        ],
+        "TableWindowTests.setUp": [
+          125,
+          130
+        ],
+        "TableWindowTests.test_every_table_window_keeps_header_mapping_and_complete_rows": [
+          132,
+          148
+        ],
+        "TableWindowTests.test_generation_budget_does_not_cut_a_table_row_or_drop_required_header": [
+          150,
+          158
+        ],
+        "TableWindowTests.test_explicit_table_read_supplies_header_without_widening_contiguous_range": [
+          160,
+          168
+        ],
+        "TableWindowTests.test_focus_on_a_late_row_keeps_header_as_separate_required_evidence": [
+          170,
+          177
+        ],
+        "PDFStorageAndWebTests": [
+          180,
+          277
+        ],
+        "PDFStorageAndWebTests.setUp": [
+          181,
+          183
+        ],
+        "PDFStorageAndWebTests.tearDown": [
+          185,
+          191
+        ],
+        "PDFStorageAndWebTests.upload": [
+          193,
+          197
+        ],
+        "PDFStorageAndWebTests.test_real_import_read_asset_and_stale_version_access": [
+          199,
+          211
+        ],
+        "PDFStorageAndWebTests.test_bad_pdf_in_batch_publishes_no_documents": [
+          213,
+          218
+        ],
+        "PDFStorageAndWebTests.test_replace_pdf_keeps_original_and_old_snapshot_but_revokes_old_asset_url": [
+          220,
+          238
+        ],
+        "PDFStorageAndWebTests.test_cached_parse_is_reused_and_raw_hash_guards_visual_evidence": [
+          240,
+          252
+        ],
+        "PDFStorageAndWebTests.test_ask_reuses_pdf_snapshot_and_exposes_page_citation": [
+          254,
+          265
+        ],
+        "PDFStorageAndWebTests.test_reparse_publishes_new_snapshot_and_rejects_stale_request": [
+          267,
+          277
+        ],
+        "VisualFallbackTests": [
+          280,
+          382
+        ],
+        "VisualFallbackTests.test_fallback_is_bounded_and_preserves_unresolved_pages": [
+          281,
+          293
+        ],
+        "VisualFallbackTests.test_fallback_error_keeps_original_and_explicit_error_type": [
+          295,
+          300
+        ],
+        "VisualFallbackTests.test_docling_failure_retains_explicitly_labelled_basic_candidate": [
+          302,
+          308
+        ],
+        "VisualFallbackTests.test_figure_navigation_cannot_be_used_as_text_question_evidence": [
+          310,
+          319
+        ],
+        "VisualFallbackTests.test_visual_citation_requires_successful_receipt": [
+          321,
+          338
+        ],
+        "VisualFallbackTests.test_image_budget_uses_separate_allowance_instead_of_base64_length": [
+          340,
+          345
+        ],
+        "VisualFallbackTests.test_successful_visual_tool_reaches_final_request_and_persisted_receipt": [
+          347,
+          382
+        ]
+      }
+    },
+    "test_pdf_vision_settings.py": {
+      "sha256": "c26ff5824186c88fa38713f0a6f8e0947a6d00aad675142e21cb13a9b9dab85b",
+      "lines": 103,
+      "symbols": {
+        "service_error": [
+          13,
+          16
+        ],
+        "VisionRoutingTests": [
+          19,
+          99
+        ],
+        "VisionRoutingTests.setUp": [
+          20,
+          24
+        ],
+        "VisionRoutingTests.tearDown": [
+          26,
+          27
+        ],
+        "VisionRoutingTests.test_unset_vision_configuration_uses_all_chat_settings": [
+          29,
+          36
+        ],
+        "VisionRoutingTests.test_vision_fields_override_independently_and_empty_values_fall_back": [
+          38,
+          46
+        ],
+        "VisionRoutingTests.test_explicit_unsupported_is_cached_without_repeated_requests": [
+          48,
+          60
+        ],
+        "VisionRoutingTests.test_api_failures_and_invalid_images_do_not_poison_capability": [
+          62,
+          75
+        ],
+        "VisionRoutingTests.test_success_is_recorded_for_the_exact_connection": [
+          77,
+          84
+        ],
+        "VisionRoutingTests.test_explicit_service_code_is_recognized_but_auth_is_not": [
+          86,
+          88
+        ],
+        "VisionRoutingTests.test_import_stops_after_first_explicit_unsupported_response": [
+          90,
+          99
+        ]
+      }
+    },
+    "test_practice.py": {
+      "sha256": "ea27a036f1cbfd144108fc2774221d17cd395c3b1a8bde24e97035ef387e9845",
+      "lines": 201,
+      "symbols": {
+        "question": [
+          28,
+          33
+        ],
+        "grade": [
+          36,
+          46
+        ],
+        "PracticeTests": [
+          49,
+          197
+        ],
+        "PracticeTests.setUp": [
+          50,
+          51
+        ],
+        "PracticeTests.test_provider_without_schema_support_gets_exact_fallback_contract": [
+          53,
+          80
+        ],
+        "PracticeTests.test_provider_without_schema_support_gets_exact_fallback_contract.respond": [
+          56,
+          74
+        ],
+        "PracticeTests.test_question_and_grade_reject_forged_citations_or_answer_quotes": [
+          82,
+          96
+        ],
+        "PracticeTests.test_raw_answer_survives_reopen_and_follow_up_waits_for_real_answer": [
+          98,
+          133
+        ],
+        "PracticeTests.test_web_flow_saves_answer_before_failed_grading_and_allows_retry": [
+          135,
+          181
+        ],
+        "PracticeTests.test_old_database_migration_preserves_records_and_defaults_language": [
+          183,
+          197
+        ]
+      }
+    },
+    "test_production_retrieval.py": {
+      "sha256": "284f83ba805298aa0720b7a245ccf1528d554f1ab8b7cb41c87671f97e1ba9af",
+      "lines": 198,
+      "symbols": {
+        "ProductionToolsTests": [
+          33,
+          88
+        ],
+        "ProductionToolsTests.setUp": [
+          34,
+          37
+        ],
+        "ProductionToolsTests.tearDown": [
+          39,
+          39
+        ],
+        "ProductionToolsTests.tool": [
+          41,
+          43
+        ],
+        "ProductionToolsTests.test_lazy_read_then_search_reuses_exact_instance_bm25": [
+          45,
+          53
+        ],
+        "ProductionToolsTests.test_original_text_topk_scope_and_score_units": [
+          55,
+          67
+        ],
+        "ProductionToolsTests.test_production_top10_matches_independent_frozen_protocol_b": [
+          69,
+          79
+        ],
+        "ProductionToolsTests.test_no_lexical_hits_preserve_dense_order_failure_no_fallback": [
+          81,
+          88
+        ],
+        "ProductionWebTests": [
+          91,
+          136
+        ],
+        "ProductionWebTests.setUp": [
+          92,
+          92
+        ],
+        "ProductionWebTests.tearDown": [
+          93,
+          93
+        ],
+        "ProductionWebTests.completed": [
+          94,
+          94
+        ],
+        "ProductionWebTests.submit": [
+          95,
+          95
+        ],
+        "ProductionWebTests.test_modes_validate_persist_and_retry_same_turn": [
+          97,
+          118
+        ],
+        "ProductionWebTests.test_modes_validate_persist_and_retry_same_turn.failed_run": [
+          100,
+          102
+        ],
+        "ProductionWebTests.test_legacy_request_missing_mode_replays_without_archival_rewrite": [
+          120,
+          131
+        ],
+        "ProductionWebTests.test_selected_mode_zero_tools_never_loads_embedding": [
+          133,
+          136
+        ],
+        "ProductionBudgetTests": [
+          139,
+          168
+        ],
+        "ProductionBudgetTests.test_hybrid_topk_trimmed_to_actual_visible_lines_in_both_requests": [
+          140,
+          168
+        ],
+        "ProductionBudgetTests.test_hybrid_topk_trimmed_to_actual_visible_lines_in_both_requests.respond": [
+          146,
+          157
+        ],
+        "ProductionBudgetTests.test_hybrid_topk_trimmed_to_actual_visible_lines_in_both_requests.client": [
+          158,
+          158
+        ],
+        "AutomaticAuditTests": [
+          171,
+          195
+        ],
+        "AutomaticAuditTests.test_agent_adjudication_exclusion_freeze_keeps_user_and_original": [
+          172,
+          195
+        ]
+      }
+    },
+    "test_rerank_retrieval.py": {
+      "sha256": "c817845395fed88c0d03ecb80db96cbc2c719d05a7364fe45719af3bed3102ea",
+      "lines": 285,
+      "symbols": {
+        "ControlledRanker": [
+          20,
+          34
+        ],
+        "ControlledRanker.__init__": [
+          21,
+          24
+        ],
+        "ControlledRanker.token_count": [
+          26,
+          27
+        ],
+        "ControlledRanker.predict": [
+          29,
+          31
+        ],
+        "ControlledRanker.profile": [
+          33,
+          34
+        ],
+        "RerankTests": [
+          37,
+          281
+        ],
+        "RerankTests.setUp": [
+          38,
+          56
+        ],
+        "RerankTests.tearDown": [
+          58,
+          59
+        ],
+        "RerankTests.c_run": [
+          61,
+          66
+        ],
+        "RerankTests.freeze": [
+          68,
+          70
+        ],
+        "RerankTests.test_windows_cover_all_original_chars_and_repeat_whole_query": [
+          72,
+          81
+        ],
+        "RerankTests.test_query_overflow_is_failure_not_truncation": [
+          83,
+          86
+        ],
+        "RerankTests.test_window_and_total_pair_limits_do_not_drop_tail_or_candidates": [
+          88,
+          93
+        ],
+        "RerankTests.test_scores_reorder_exact_pool_original_ranges_and_no_mutation": [
+          95,
+          102
+        ],
+        "RerankTests.test_ties_preserve_B_order": [
+          104,
+          108
+        ],
+        "RerankTests.test_raw_complete_query_and_original_only_enter_model": [
+          110,
+          114
+        ],
+        "RerankTests.test_bad_scores_fail_instead_of_using_B_as_C": [
+          116,
+          121
+        ],
+        "RerankTests.test_B_missing_or_failed_queries_are_retained_without_new_search": [
+          123,
+          130
+        ],
+        "RerankTests.test_B_alien_text_duplicate_and_version_rejected_before_scoring": [
+          132,
+          139
+        ],
+        "RerankTests.test_changed_B_and_C_pool_or_window_rejected": [
+          141,
+          151
+        ],
+        "RerankTests.test_windows_score_maximum_and_trace_coverage": [
+          153,
+          162
+        ],
+        "RerankTests.test_candidates_before_rerank_and_true_BEIR_rescue_denominators": [
+          164,
+          174
+        ],
+        "RerankTests.test_C_failure_stays_in_recall_and_rescue_denominator": [
+          176,
+          184
+        ],
+        "RerankTests.test_ABC_compare_and_markdown_preserve_same_freeze": [
+          186,
+          197
+        ],
+        "RerankTests.test_ranking_does_not_read_annotations_or_gold": [
+          199,
+          204
+        ],
+        "RerankTests.test_rerank_command_uses_saved_pool_no_embedding_load": [
+          206,
+          218
+        ],
+        "RerankTests.test_config_requires_pinned_version_and_positive_limits": [
+          220,
+          222
+        ],
+        "RerankTests.test_C_candidate20_remains_B_pool20_when_gold_promoted_from_last": [
+          224,
+          242
+        ],
+        "RerankTests.test_adapter_loads_only_local_safe_model_and_obeys_real_capacity": [
+          244,
+          260
+        ],
+        "RerankTests.test_tensor_adapter_disables_truncation_and_preserves_raw_logits": [
+          262,
+          281
+        ],
+        "RerankTests.test_tensor_adapter_disables_truncation_and_preserves_raw_logits.Tokenizer": [
+          265,
+          271
+        ],
+        "RerankTests.test_tensor_adapter_disables_truncation_and_preserves_raw_logits.Tokenizer.__call__": [
+          267,
+          271
+        ]
+      }
+    },
+    "test_retrieval.py": {
+      "sha256": "26b97ab45d68c47c8525d4ace134a75c78d97a17f3f76754c6f273a93a530089",
+      "lines": 43,
+      "symbols": {
+        "RetrievalTests": [
+          9,
+          39
+        ],
+        "RetrievalTests.setUp": [
+          10,
+          12
+        ],
+        "RetrievalTests.test_cosine_ranking_ignores_vector_magnitude": [
+          14,
+          20
+        ],
+        "RetrievalTests.test_ties_keep_order_and_large_k_returns_only_existing_chunks": [
+          22,
+          25
+        ],
+        "RetrievalTests.test_invalid_vectors_are_rejected": [
+          27,
+          39
+        ]
+      }
+    },
+    "test_retrieval_benchmark.py": {
+      "sha256": "26a163dbd61b7c8e8a12b496a8e7e66c9cfaae08a981cb8adc5298a645e331c9",
+      "lines": 442,
+      "symbols": {
+        "FixtureEmbedder": [
+          24,
+          40
+        ],
+        "FixtureEmbedder.prepare_chunks": [
+          28,
+          29
+        ],
+        "FixtureEmbedder.cache_profile": [
+          31,
+          32
+        ],
+        "FixtureEmbedder.embed_query": [
+          34,
+          37
+        ],
+        "FixtureEmbedder.embed_chunks": [
+          39,
+          40
+        ],
+        "fixture": [
+          43,
+          56
+        ],
+        "approved": [
+          59,
+          66
+        ],
+        "full_audit": [
+          69,
+          75
+        ],
+        "RetrievalReviewTests": [
+          78,
+          400
+        ],
+        "RetrievalReviewTests.setUp": [
+          79,
+          86
+        ],
+        "RetrievalReviewTests.tearDown": [
+          88,
+          93
+        ],
+        "RetrievalReviewTests.freeze": [
+          95,
+          100
+        ],
+        "RetrievalReviewTests.test_initial_labels_do_not_mark_unknown_as_zero": [
+          102,
+          105
+        ],
+        "RetrievalReviewTests.test_manifest_create_is_idempotent_and_tampering_rejected": [
+          107,
+          111
+        ],
+        "RetrievalReviewTests.test_unjudged_cannot_be_approved": [
+          113,
+          117
+        ],
+        "RetrievalReviewTests.test_scope_check_required": [
+          119,
+          122
+        ],
+        "RetrievalReviewTests.test_extra_or_missing_judgment_rejected": [
+          124,
+          129
+        ],
+        "RetrievalReviewTests.test_dispute_needs_resolution": [
+          131,
+          136
+        ],
+        "RetrievalReviewTests.test_initial_audit_suggestion_keeps_original_draft": [
+          138,
+          141
+        ],
+        "RetrievalReviewTests.test_groups_cannot_point_to_irrelevant_or_out_of_scope_chunks": [
+          143,
+          148
+        ],
+        "RetrievalReviewTests.test_stale_retry_does_not_duplicate_review": [
+          150,
+          154
+        ],
+        "RetrievalReviewTests.test_pending_prevents_freeze_and_exclusion_needs_reason": [
+          156,
+          160
+        ],
+        "RetrievalReviewTests.test_freeze_immutable_idempotent_and_new_revision": [
+          162,
+          171
+        ],
+        "RetrievalReviewTests.test_no_answer_cannot_have_positive_evidence": [
+          173,
+          176
+        ],
+        "RetrievalReviewTests.test_complete_agent_audit_auto_adopts_and_reapplication_is_idempotent": [
+          178,
+          187
+        ],
+        "RetrievalReviewTests.test_agent_audit_does_not_fill_unknown_or_apply_partial_invalid_batch": [
+          189,
+          196
+        ],
+        "RetrievalReviewTests.test_agent_adoption_keeps_existing_user_draft": [
+          198,
+          204
+        ],
+        "RetrievalReviewTests.test_uncertainty_stays_pending_and_blocks_freeze": [
+          206,
+          209
+        ],
+        "RetrievalReviewTests.test_human_decision_keeps_audit_pointer_and_marks_user_origin": [
+          211,
+          220
+        ],
+        "RetrievalReviewTests.test_auto_freeze_metrics_record_provenance_and_reject_forged_labels": [
+          222,
+          234
+        ],
+        "RetrievalReviewTests.test_http_cannot_forge_auto_status_and_returns_dispute_focus": [
+          236,
+          248
+        ],
+        "RetrievalReviewTests.test_prepare_reuses_only_matching_audit_and_preserves_user_edit": [
+          250,
+          286
+        ],
+        "RetrievalReviewTests.test_prepare_reuses_only_matching_audit_and_preserves_user_edit.prepare": [
+          260,
+          264
+        ],
+        "RetrievalReviewTests.test_http_page_save_stale_and_freeze_contract": [
+          288,
+          305
+        ],
+        "RetrievalReviewTests.test_real_beir_known_ranking_and_negative_separate": [
+          307,
+          321
+        ],
+        "RetrievalReviewTests.test_beir_missing_and_failed_queries_remain_zero": [
+          323,
+          331
+        ],
+        "RetrievalReviewTests.test_missing_answerable_query_halves_mean_instead_of_disappearing": [
+          333,
+          344
+        ],
+        "RetrievalReviewTests.test_frozen_export_beir_files_and_old_run_scoring_without_model": [
+          346,
+          375
+        ],
+        "RetrievalReviewTests.test_complete_evidence_and_alternative_bundles": [
+          377,
+          391
+        ],
+        "RetrievalReviewTests.test_different_manifest_and_duplicate_outside_hits_rejected": [
+          393,
+          400
+        ],
+        "RetrievalBaselineTests": [
+          403,
+          438
+        ],
+        "RetrievalBaselineTests.test_public_fixture_validation_and_actual_prepared_units": [
+          404,
+          414
+        ],
+        "RetrievalBaselineTests.test_dense_baseline_matches_existing_tool_and_keeps_failures": [
+          416,
+          429
+        ],
+        "RetrievalBaselineTests.test_percentile_and_rerank_eligible_denominators": [
+          431,
+          438
+        ]
+      }
+    },
+    "test_retrieval_expansion.py": {
+      "sha256": "333ebe7a9953b499b8a2a6b13491fa0f3fbd765eec292946faf7b21109a32bf9",
+      "lines": 184,
+      "symbols": {
+        "ExpansionTests": [
+          21,
+          180
+        ],
+        "ExpansionTests.setUp": [
+          22,
+          27
+        ],
+        "ExpansionTests.tearDown": [
+          29,
+          30
+        ],
+        "ExpansionTests.test_counts_family_isolation_and_original_pilot_preserved": [
+          32,
+          42
+        ],
+        "ExpansionTests.test_complete_audit_and_only_two_uncertain": [
+          44,
+          50
+        ],
+        "ExpansionTests.test_missing_or_duplicate_section_never_defaults_to_zero": [
+          52,
+          58
+        ],
+        "ExpansionTests.test_source_changed_rejects_old_editorial_ledger": [
+          60,
+          63
+        ],
+        "ExpansionTests.test_explicit_multi_grade_corrections_preserve_initial_ledger": [
+          65,
+          76
+        ],
+        "ExpansionTests.test_prepare_explicit_suite_uses_sibling_audit_preserves_edits": [
+          78,
+          104
+        ],
+        "ExpansionTests.test_validate_explicit_suite_without_models": [
+          106,
+          109
+        ],
+        "ExpansionTests.test_agent_correction_appends_original_and_freeze_immutable": [
+          111,
+          127
+        ],
+        "ExpansionTests.test_agent_correction_cas_and_user_draft_protection": [
+          129,
+          140
+        ],
+        "ExpansionTests.test_agent_correction_cannot_bypass_pending_dispute": [
+          142,
+          149
+        ],
+        "ExpansionTests.test_bind_command_write_once_no_model_and_no_label_publication": [
+          151,
+          162
+        ],
+        "ExpansionTests.test_failure_inventory_frozen_missing_kept_negative_separate": [
+          164,
+          180
+        ]
+      }
+    },
+    "test_sources.py": {
+      "sha256": "01876c775f31d919ceca9b8db667a542086cbbf1f7e8b6ff3a6763619e8f0ddd",
+      "lines": 36,
+      "symbols": {
+        "SourcesTests": [
+          8,
+          32
+        ],
+        "SourcesTests.test_identity_is_order_independent_and_versioned": [
+          9,
+          22
+        ],
+        "SourcesTests.test_rejects_bad_inputs": [
+          24,
+          32
+        ]
+      }
+    },
+    "test_structured_output.py": {
+      "sha256": "f518e194259f6554dfffcea8fa49bdfd399f0640b333131ba6630b51168ed110",
+      "lines": 77,
+      "symbols": {
+        "StructuredOutputTests": [
+          14,
+          73
+        ],
+        "StructuredOutputTests.setUp": [
+          15,
+          16
+        ],
+        "StructuredOutputTests.result": [
+          19,
+          29
+        ],
+        "StructuredOutputTests.test_reasoning_provider_auto_fallback_is_validated_and_cached": [
+          31,
+          50
+        ],
+        "StructuredOutputTests.test_reasoning_provider_auto_fallback_is_validated_and_cached.respond": [
+          36,
+          45
+        ],
+        "StructuredOutputTests.test_malformed_tool_result_is_rejected_and_does_not_cache_success": [
+          52,
+          61
+        ],
+        "StructuredOutputTests.test_malformed_tool_result_is_rejected_and_does_not_cache_success.respond": [
+          53,
+          56
+        ],
+        "StructuredOutputTests.test_unrelated_provider_error_does_not_trigger_fallback": [
+          63,
+          73
+        ],
+        "StructuredOutputTests.test_unrelated_provider_error_does_not_trigger_fallback.respond": [
+          66,
+          68
+        ]
+      }
+    },
+    "test_support.py": {
+      "sha256": "350cada8c816a82016ebe6713e701eb2e32e258295988d63b656b90ac74d020e",
+      "lines": 18,
+      "symbols": {
+        "temporary_notes": [
+          9,
+          18
+        ]
+      }
+    },
+    "test_table_reading.py": {
+      "sha256": "0cf4a88a6da066b79fffadd5caf594a4166f0293d3f1063e70a878bb0689e4cd",
+      "lines": 74,
+      "symbols": {
+        "TableReadingTests": [
+          15,
+          70
+        ],
+        "TableReadingTests.setUp": [
+          16,
+          20
+        ],
+        "TableReadingTests.read": [
+          22,
+          24
+        ],
+        "TableReadingTests.test_caption_unit_and_note_are_separate_real_excerpts": [
+          26,
+          34
+        ],
+        "TableReadingTests.test_partial_rows_report_coverage_and_do_not_grant_unread_row": [
+          36,
+          45
+        ],
+        "TableReadingTests.test_all_extracted_rows_are_explicitly_reported": [
+          47,
+          52
+        ],
+        "TableReadingTests.test_invalid_range_and_alien_source_are_rejected": [
+          54,
+          59
+        ],
+        "TableReadingTests.test_new_optional_fields_do_not_change_old_snapshot_identity": [
+          61,
+          66
+        ],
+        "TableReadingTests.test_context_links_survive_json_roundtrip": [
+          68,
+          70
+        ]
+      }
+    },
+    "test_vector_index.py": {
+      "sha256": "99903e2ea9f128e3cdd5f2ce07977d3ad5ea3bff96cfab8f518436dc9bcf46e8",
+      "lines": 126,
+      "symbols": {
+        "VectorIndexTests": [
+          16,
+          122
+        ],
+        "VectorIndexTests.setUp": [
+          17,
+          29
+        ],
+        "VectorIndexTests.read_chunks": [
+          31,
+          32
+        ],
+        "VectorIndexTests.get": [
+          34,
+          36
+        ],
+        "VectorIndexTests.test_reopen_reuses_vectors_preserves_order_and_rank": [
+          38,
+          46
+        ],
+        "VectorIndexTests.test_changed_document_only_recomputes_that_document_and_omitted_files_stay_out": [
+          48,
+          57
+        ],
+        "VectorIndexTests.test_weight_settings_dimension_and_input_changes_do_not_reuse": [
+          59,
+          73
+        ],
+        "VectorIndexTests.test_damaged_vector_row_is_recomputed": [
+          75,
+          81
+        ],
+        "VectorIndexTests.test_failed_rebuild_leaves_previous_data_intact": [
+          83,
+          94
+        ],
+        "VectorIndexTests.test_rebuild_replaces_only_selected_rows_and_records_profile": [
+          96,
+          105
+        ],
+        "VectorIndexTests.test_broken_database_is_reported_without_overwrite": [
+          107,
+          111
+        ],
+        "VectorIndexTests.test_database_write_failure_rolls_back_partial_rebuild": [
+          113,
+          122
+        ]
+      }
+    },
+    "test_web_app.py": {
+      "sha256": "670dca96676220f8d5cb49070b657221daa33b14d5695dc32b132341750dd871",
+      "lines": 172,
+      "symbols": {
+        "WebWorkspaceTests": [
+          15,
+          168
+        ],
+        "WebWorkspaceTests.setUp": [
+          16,
+          19
+        ],
+        "WebWorkspaceTests.tearDown": [
+          21,
+          24
+        ],
+        "WebWorkspaceTests.import_note": [
+          26,
+          31
+        ],
+        "WebWorkspaceTests.test_page_catalog_and_imported_note_keep_source_lines": [
+          33,
+          40
+        ],
+        "WebWorkspaceTests.test_rendered_markdown_carries_block_ranges_and_escapes_html": [
+          42,
+          49
+        ],
+        "WebWorkspaceTests.test_import_rejects_invalid_content_and_document_ids": [
+          51,
+          64
+        ],
+        "WebWorkspaceTests.test_ask_reuses_focus_snapshot_and_returns_traceable_citation": [
+          66,
+          107
+        ],
+        "WebWorkspaceTests.test_ask_reuses_focus_snapshot_and_returns_traceable_citation.answer": [
+          78,
+          92
+        ],
+        "WebWorkspaceTests.test_ask_rejects_out_of_scope_or_invalid_selection": [
+          109,
+          120
+        ],
+        "WebWorkspaceTests.test_invalid_language_is_rejected_before_model_request": [
+          122,
+          132
+        ],
+        "WebWorkspaceTests.test_ask_defaults_to_whole_document_without_selection": [
+          134,
+          153
+        ],
+        "WebWorkspaceTests.test_optional_web_selection_can_exceed_read_tool_line_limit": [
+          155,
+          168
+        ]
+      }
+    },
+    "vector_index.py": {
+      "sha256": "07c3e95c31da2bfc46a1c413b1bd2996fa09be31f0f35f65237ae0408cecbb84",
+      "lines": 94,
+      "symbols": {
+        "IndexResult": [
+          18,
+          21
+        ],
+        "vector_is_valid": [
+          24,
+          33
+        ],
+        "get_document_vectors": [
+          36,
+          94
+        ]
+      }
+    },
+    "web/static/app.js": {
+      "sha256": "e8a1ed20a75104afb57cfcd26daf6dda63d01cf1cfaf30a13260af6b6fe7a570",
+      "lines": 918
+    },
+    "web/static/chat-stream.js": {
+      "sha256": "0d4b4cce47598ce315d7d82efe771c1fa2d1a5113826ca018071234a18b27667",
+      "lines": 48
+    },
+    "web/static/gateway.js": {
+      "sha256": "89bd598b6b6928f7c1203afb06dc00e3e5d1df1ce9ccdfa8f080e142da83fcf6",
+      "lines": 113
+    },
+    "web/static/learning.js": {
+      "sha256": "2ecaf63575be9144569aafa2e58e24eefebdafcf2ac26e73c0bad314b29e8547",
+      "lines": 236
+    },
+    "web/static/library.js": {
+      "sha256": "0dd3f8e3326bcbd7d096159ce4fce436de2432f1d2c517d3cebefb91ba8c390c",
+      "lines": 218
+    },
+    "web/static/outline-review.js": {
+      "sha256": "21ffdd101969f07e927076ca5ad0cc8deacbdd0aa57b9ff03543e37952c99d6c",
+      "lines": 85
+    },
+    "web/static/outline-route.js": {
+      "sha256": "f62b9f5f84a5e08d03ea3efe1fa072542419eb483cc28208c93d24d022c8982d",
+      "lines": 201
+    },
+    "web/static/outlines.js": {
+      "sha256": "2bc708ee924c54064543d0ce93728d290828233168e07e4273c396a5cdb4fc84",
+      "lines": 456
+    },
+    "web/static/retrieval-review.js": {
+      "sha256": "135580253c0aa915acacb48833ba207758dc66401640d7c7de2b5b4049dacf16",
+      "lines": 163
+    },
+    "web/templates/index.html": {
+      "sha256": "9b984a51926926ab53155b2cb9dd197982937953d6f04c14559947dad82dc6eb",
+      "lines": 174
+    },
+    "web/templates/retrieval-review.html": {
+      "sha256": "5cb9f2cae936af34e6edbce62e4458d4c187cad39861b8d28e8b8d1aaaf66028",
+      "lines": 33
+    },
+    "web_app.py": {
+      "sha256": "048af1bdecdd4b973c22aa1aad99ab5887975395e9f1169d193601707aa414bb",
+      "lines": 1344,
+      "symbols": {
+        "Document": [
+          57,
+          63
+        ],
+        "DocumentCatalog": [
+          66,
+          148
+        ],
+        "DocumentCatalog.__init__": [
+          67,
+          69
+        ],
+        "DocumentCatalog.managed": [
+          71,
+          78
+        ],
+        "DocumentCatalog.list": [
+          80,
+          100
+        ],
+        "DocumentCatalog.get": [
+          102,
+          115
+        ],
+        "DocumentCatalog.prepare_import": [
+          118,
+          136
+        ],
+        "DocumentCatalog.import_note": [
+          138,
+          148
+        ],
+        "render_markdown": [
+          151,
+          173
+        ],
+        "render_markdown.code_block": [
+          161,
+          169
+        ],
+        "AskRequest": [
+          176,
+          189
+        ],
+        "ConversationRequest": [
+          192,
+          194
+        ],
+        "TurnRequest": [
+          197,
+          198
+        ],
+        "RetryTurnRequest": [
+          201,
+          204
+        ],
+        "ChatPracticeRequest": [
+          207,
+          216
+        ],
+        "PracticeStartRequest": [
+          219,
+          228
+        ],
+        "CollectionRequest": [
+          231,
+          234
+        ],
+        "CollectionAssignment": [
+          237,
+          239
+        ],
+        "CollectionPracticeRequest": [
+          242,
+          245
+        ],
+        "OutlineRequest": [
+          248,
+          249
+        ],
+        "OutlineEditRequest": [
+          252,
+          255
+        ],
+        "OutlineEnrollRequest": [
+          258,
+          263
+        ],
+        "OutlineGroupRequest": [
+          266,
+          271
+        ],
+        "OutlineGroupContinueRequest": [
+          274,
+          276
+        ],
+        "OutlineGroupReviewRequest": [
+          279,
+          286
+        ],
+        "OutlineSourceReviewRequest": [
+          289,
+          292
+        ],
+        "OutlineSourceReviewApplyRequest": [
+          295,
+          299
+        ],
+        "OutlineRouteRequest": [
+          302,
+          303
+        ],
+        "OutlineRouteEdgeRequest": [
+          306,
+          313
+        ],
+        "OutlineRouteOrderRequest": [
+          316,
+          320
+        ],
+        "OutlineRouteAddRequest": [
+          323,
+          329
+        ],
+        "PracticeAnswerRequest": [
+          332,
+          337
+        ],
+        "EnrollmentRequest": [
+          340,
+          345
+        ],
+        "ReviewRequest": [
+          348,
+          351
+        ],
+        "DimensionRequest": [
+          354,
+          357
+        ],
+        "RatingRequest": [
+          360,
+          363
+        ],
+        "StatusRequest": [
+          366,
+          368
+        ],
+        "GradeCorrectionRequest": [
+          371,
+          381
+        ],
+        "PracticeGradeRequest": [
+          384,
+          386
+        ],
+        "CorrectionRequest": [
+          389,
+          393
+        ],
+        "_source_for": [
+          396,
+          413
+        ],
+        "create_app": [
+          416,
+          1335
+        ],
+        "create_app.worker_metrics": [
+          423,
+          424
+        ],
+        "create_app.healthz": [
+          427,
+          428
+        ],
+        "create_app.home": [
+          449,
+          452
+        ],
+        "create_app.documents": [
+          455,
+          459
+        ],
+        "create_app.collections": [
+          462,
+          463
+        ],
+        "create_app.create_collection": [
+          466,
+          467
+        ],
+        "create_app.rename_collection": [
+          470,
+          471
+        ],
+        "create_app.move_collection": [
+          474,
+          475
+        ],
+        "create_app.remove_collection": [
+          478,
+          479
+        ],
+        "create_app.move_document": [
+          482,
+          484
+        ],
+        "create_app.move_plan_item": [
+          487,
+          488
+        ],
+        "create_app.collection_practice": [
+          492,
+          503
+        ],
+        "create_app.collection_snapshots": [
+          505,
+          514
+        ],
+        "create_app.outline_action": [
+          516,
+          524
+        ],
+        "create_app.outline_list": [
+          527,
+          537
+        ],
+        "create_app.outline_list.action": [
+          528,
+          536
+        ],
+        "create_app.create_outline": [
+          541,
+          555
+        ],
+        "create_app.create_outline.action": [
+          542,
+          554
+        ],
+        "create_app.read_outline": [
+          558,
+          559
+        ],
+        "create_app.resume_outline": [
+          563,
+          574
+        ],
+        "create_app.resume_outline.action": [
+          564,
+          573
+        ],
+        "create_app.pause_outline": [
+          577,
+          578
+        ],
+        "create_app.update_outline_candidate": [
+          581,
+          582
+        ],
+        "create_app.group_outline": [
+          586,
+          597
+        ],
+        "create_app.group_outline.action": [
+          587,
+          596
+        ],
+        "create_app.retry_outline_grouping": [
+          601,
+          608
+        ],
+        "create_app.retry_outline_grouping.action": [
+          602,
+          607
+        ],
+        "create_app.pause_outline_grouping": [
+          611,
+          619
+        ],
+        "create_app.pause_outline_grouping.action": [
+          612,
+          618
+        ],
+        "create_app.update_outline_group": [
+          622,
+          633
+        ],
+        "create_app.update_outline_group.action": [
+          623,
+          632
+        ],
+        "create_app.source_review": [
+          637,
+          646
+        ],
+        "create_app.source_review.action": [
+          638,
+          645
+        ],
+        "create_app.continue_review": [
+          650,
+          656
+        ],
+        "create_app.continue_review.action": [
+          651,
+          655
+        ],
+        "create_app.pause_source_review": [
+          659,
+          661
+        ],
+        "create_app.apply_review": [
+          664,
+          667
+        ],
+        "create_app.generate_route": [
+          671,
+          679
+        ],
+        "create_app.generate_route.action": [
+          672,
+          678
+        ],
+        "create_app.retry_route": [
+          683,
+          689
+        ],
+        "create_app.retry_route.action": [
+          684,
+          688
+        ],
+        "create_app.stop_route": [
+          692,
+          694
+        ],
+        "create_app.review_route_edge": [
+          697,
+          700
+        ],
+        "create_app.change_route_order": [
+          703,
+          705
+        ],
+        "create_app.add_route_edge": [
+          708,
+          710
+        ],
+        "create_app.enroll_outline_candidate": [
+          714,
+          716
+        ],
+        "create_app.read_document": [
+          719,
+          756
+        ],
+        "create_app.read_asset": [
+          759,
+          767
+        ],
+        "create_app.import_documents": [
+          770,
+          792
+        ],
+        "create_app.replace_document": [
+          795,
+          820
+        ],
+        "create_app.remove_document": [
+          823,
+          828
+        ],
+        "create_app.reparse_document": [
+          831,
+          843
+        ],
+        "create_app.resolve_scope": [
+          845,
+          864
+        ],
+        "create_app.generate_answer": [
+          866,
+          934
+        ],
+        "create_app.ask": [
+          938,
+          939
+        ],
+        "create_app.conversation_action": [
+          941,
+          947
+        ],
+        "create_app.public_turn": [
+          949,
+          950
+        ],
+        "create_app.list_conversations": [
+          953,
+          954
+        ],
+        "create_app.archive_conversation": [
+          957,
+          958
+        ],
+        "create_app.restore_conversation": [
+          961,
+          962
+        ],
+        "create_app.delete_conversation": [
+          965,
+          967
+        ],
+        "create_app.history_reference": [
+          970,
+          978
+        ],
+        "create_app.create_conversation": [
+          981,
+          984
+        ],
+        "create_app.read_conversation_metadata": [
+          987,
+          988
+        ],
+        "create_app.rename_conversation": [
+          991,
+          994
+        ],
+        "create_app.conversation_messages": [
+          997,
+          1016
+        ],
+        "create_app.conversation_messages.action": [
+          1000,
+          1015
+        ],
+        "create_app.conversation_summary": [
+          1019,
+          1020
+        ],
+        "create_app.execute_turn": [
+          1022,
+          1077
+        ],
+        "create_app.stream_turn": [
+          1080,
+          1097
+        ],
+        "create_app.stream_turn.action": [
+          1084,
+          1094
+        ],
+        "create_app.stream_turn.action.notify": [
+          1089,
+          1092
+        ],
+        "create_app.stream_retry_turn": [
+          1100,
+          1115
+        ],
+        "create_app.stream_retry_turn.action": [
+          1101,
+          1112
+        ],
+        "create_app.stream_retry_turn.action.retry": [
+          1102,
+          1111
+        ],
+        "create_app.stream_retry_turn.action.retry.notify": [
+          1106,
+          1109
+        ],
+        "create_app.submit_turn": [
+          1119,
+          1125
+        ],
+        "create_app.retry_turn": [
+          1129,
+          1139
+        ],
+        "create_app.retry_turn.action": [
+          1130,
+          1134
+        ],
+        "create_app.skip_turn": [
+          1142,
+          1148
+        ],
+        "create_app.skip_turn.action": [
+          1143,
+          1147
+        ],
+        "create_app.list_practice": [
+          1151,
+          1152
+        ],
+        "create_app.guard_documents": [
+          1154,
+          1158
+        ],
+        "create_app.chat_practice_jobs": [
+          1161,
+          1166
+        ],
+        "create_app.chat_practice_jobs.action": [
+          1162,
+          1165
+        ],
+        "create_app.discussion_practice": [
+          1170,
+          1185
+        ],
+        "create_app.discussion_practice.action": [
+          1172,
+          1184
+        ],
+        "create_app.read_practice": [
+          1188,
+          1192
+        ],
+        "create_app.create_practice": [
+          1196,
+          1220
+        ],
+        "create_app.submit_practice_answer": [
+          1224,
+          1236
+        ],
+        "create_app.retry_practice_grade": [
+          1240,
+          1254
+        ],
+        "create_app.finish_practice": [
+          1257,
+          1264
+        ],
+        "create_app.correct_practice_feedback": [
+          1267,
+          1274
+        ],
+        "create_app.learning_action": [
+          1276,
+          1285
+        ],
+        "create_app.learning_plan": [
+          1288,
+          1289
+        ],
+        "create_app.enroll": [
+          1292,
+          1297
+        ],
+        "create_app.enroll.action": [
+          1293,
+          1296
+        ],
+        "create_app.review": [
+          1301,
+          1303
+        ],
+        "create_app.dimension": [
+          1307,
+          1309
+        ],
+        "create_app.learning_status": [
+          1312,
+          1313
+        ],
+        "create_app.rating": [
+          1316,
+          1317
+        ],
+        "create_app.evaluation": [
+          1320,
+          1322
+        ],
+        "create_app.continue_practice": [
+          1325,
+          1329
+        ],
+        "create_app.continue_practice.action": [
+          1326,
+          1328
+        ],
+        "create_app.reference": [
+          1332,
+          1333
+        ]
+      }
+    }
+  }
+}

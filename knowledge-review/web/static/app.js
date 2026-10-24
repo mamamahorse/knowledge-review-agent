@@ -28,7 +28,7 @@ function setStatus(id, message, isError = false) {
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await (window.gatewayFetch || fetch)(url, options);
   let body;
   try { body = await response.json(); } catch { body = {}; }
   if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "请求未完成，请稍后再试。");
@@ -422,6 +422,7 @@ async function loadChat(id) {
   if (pending && all.some((turn) => turn.request_id === pending.request_id)) {
     try { localStorage.removeItem(pendingKey(id)); } catch { }
   }
+  if (state.chatController && state.streamingChat === id) return;
   renderChat({ ...data, turns: all });
   if (typeof refreshChatPracticeJobs === 'function') refreshChatPracticeJobs().catch(() => {});
   const naming = all.some((t) => t.status === "completed") && ["pending", "generating"].includes(data.conversation.title_state);
@@ -480,13 +481,31 @@ async function sendChatSubmission(id, payload, turnId = null) {
     try { localStorage.setItem(pendingKey(id), JSON.stringify(payload)); } catch { }
   }
   setStatus("request-status", "正在保存输入、整理聊天背景并生成回答，必要时会查阅资料……");
-  setTimeout(() => {
-    if (state.chatBusy && state.conversationId === id) loadChat(id).catch(() => {});
-  }, 700);
+  const controller = new AbortController();
+  const preview = makeElement('article', 'stream-preview');
+  const label = makeElement('p', 'stream-preview-label', '正在生成，完成后显示引用与正式结果。');
+  const draft = makeElement('p', 'stream-preview-text');
+  let loginCancelled = false;
+  preview.append(label, draft);
+  if (controller) {
+    state.chatController = controller; state.streamingChat = id;
+    const stop = makeElement('button', '', '停止生成'); stop.type = 'button';
+    stop.addEventListener('click', () => controller.abort()); preview.append(stop);
+    $('answer-result').append(preview);
+  }
   try {
-    const turn = await request(`/api/conversations/${id}/turns${turnId ? `/${turnId}/retry` : ""}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const response = await (window.gatewayFetch || fetch)(`/api/conversations/${id}/turns${turnId ? `/${turnId}/retry/stream` : '/stream'}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload), signal: controller.signal,
+      });
+    const turn = await consumeChatStream(response, (event, data) => {
+        if (state.conversationId !== id) return;
+        if (event === 'delta' && typeof data.text === 'string') draft.textContent += data.text;
+        if (event === 'progress') {
+          const phase = {context: '正在整理聊天背景……', agent_model: '正在确定需要查阅的资料……',
+            tool: '正在查阅资料……', final_model: '正在生成回答……'};
+          if (phase[data.phase]) setStatus('request-status', phase[data.phase]);
+        }
     });
     try { localStorage.removeItem(pendingKey(id)); } catch { }
     if (state.conversationId === id) {
@@ -496,10 +515,16 @@ async function sendChatSubmission(id, payload, turnId = null) {
     }
     await refreshConversations();
   } catch (error) {
-    if (state.conversationId === id) setStatus("request-status", `${error.message} 输入保留；重发使用相同标识。`, true);
+    loginCancelled = error.name === 'AbortError' && !controller.signal.aborted;
+    if (state.conversationId === id) setStatus("request-status", `${error.name === "AbortError" && !loginCancelled ? "已请求停止生成。" : error.message} 输入保留；聊天记录会显示实际状态。`, true);
   } finally {
     state.chatBusy = false;
-    if (state.conversationId) {
+    state.chatController = null; state.streamingChat = null;
+    preview.remove();
+    // Authentication was refused before forwarding. A history read here would
+    // immediately reopen the login dialog the user just cancelled.
+    if (loginCancelled) $("ask-button").disabled = false;
+    else if (state.conversationId) {
       try { await loadChat(state.conversationId); } catch { $("ask-button").disabled = false; }
     }
   }

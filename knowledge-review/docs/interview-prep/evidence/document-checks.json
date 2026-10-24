@@ -1,0 +1,69 @@
+{
+  "markdown_files": [
+    {
+      "path": "INTERVIEW_BATCH_01_RETRIEVAL.md",
+      "lines": 466,
+      "characters": 20324
+    },
+    {
+      "path": "QUESTION_INDEX.md",
+      "lines": 180,
+      "characters": 8586
+    },
+    {
+      "path": "README.md",
+      "lines": 56,
+      "characters": 2285
+    },
+    {
+      "path": "SOURCE_CODE_STUDY_MAP.md",
+      "lines": 250,
+      "characters": 22874
+    },
+    {
+      "path": "TECHNICAL_DECISION_AUDIT.md",
+      "lines": 283,
+      "characters": 35696
+    },
+    {
+      "path": "VALIDATION.md",
+      "lines": 73,
+      "characters": 3948
+    }
+  ],
+  "unresolved_placeholders": [],
+  "bad_local_links": [],
+  "source_drift": [],
+  "source_references": 295,
+  "audit_decision_count": 16,
+  "audit_ten_fields": true,
+  "answered_questions": [
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "answer_seven_sections": true,
+  "original_questions_match": true,
+  "question_index_count": 120,
+  "runtime": {
+    "python": "3.13.13 (tags/v3.13.13:01104ce, Apr  7 2026, 19:25:48) [MSC v.1944 64 bit (AMD64)]",
+    "packages": {
+      "httpx": "0.28.1",
+      "httpcore": "1.0.9",
+      "openai": "2.54.0",
+      "anyio": "4.15.1",
+      "pydantic": "2.13.5"
+    }
+  },
+  "status": "passed",
+  "default_database_preservation": "not established; existing web_app import initializes default stores; see VALIDATION.md"
+}

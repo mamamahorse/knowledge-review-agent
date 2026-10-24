@@ -7,6 +7,7 @@ from contextlib import closing
 from dataclasses import dataclass, replace
 from html import escape
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 from typing import Literal
 from hashlib import sha256
@@ -488,6 +489,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return learning_action(lambda: (library.move_review(identity, payload.collection_id), {"saved": True})[1])
 
     @app.post("/api/collections/{identity}/practice", status_code=201)
+    @streams.bounded
     def collection_practice(identity: str, payload: CollectionPracticeRequest):
         docs = documents(identity)
         if not docs:
@@ -709,6 +711,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return outline_action(lambda:{'id':add_edge(outlines,identity,payload.revision,payload.before_id,payload.after_id,payload.kind,payload.reason,collection_snapshots)})
 
     @app.post('/api/outline-candidates/{identity}/enroll')
+    @streams.bounded
     def enroll_outline_candidate(identity: str, payload: OutlineEnrollRequest):
         return outline_action(lambda: enroll_candidate(outlines, identity, payload.revision, payload.collection_id,
             payload.unit_id, payload.response_language, collection_snapshots))
@@ -765,7 +768,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(404, detail='当前版本没有这个视觉资源。') from exc
 
     @app.post("/api/documents", status_code=201)
-    async def import_documents(files: list[UploadFile] = File(...), collection_id: str = "root"):
+    async def import_documents(request: Request, files: list[UploadFile] = File(...), collection_id: str = "root"):
         learning_action(lambda: library.get(collection_id))
         if not 1 <= len(files) <= MAX_SCOPE:
             raise HTTPException(status_code=400, detail=f"每次最多导入 {MAX_SCOPE} 份笔记。")
@@ -777,8 +780,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 safe_name, body = catalog.prepare_import(file.filename or "", content)
                 parsed = None
                 if isinstance(body, bytes):
-                    from pdf_parser import parse_pdf
-                    parsed = await run_in_threadpool(parse_pdf, body, raw_file=safe_name)
+                    parsed = await parse_document_pdf(body, safe_name, request)
                 prepared.append((safe_name, body, parsed))
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -790,7 +792,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return imported
 
     @app.put('/api/documents/{identity}')
-    async def replace_document(identity: str, expected_source_id: str, file: UploadFile = File(...)):
+    async def replace_document(identity: str, expected_source_id: str, request: Request, file: UploadFile = File(...)):
         doc = catalog.get(identity)
         if not identity.startswith('upload-'):
             raise HTTPException(400, detail='示例文档只供阅读，请导入自己的文件再替换。')
@@ -803,8 +805,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 raise ValueError('替换文件需保持原资料格式；不同格式请另行导入。')
             parsed = None
             if isinstance(text, bytes):
-                from pdf_parser import parse_pdf
-                parsed = await run_in_threadpool(parse_pdf, text, raw_file=safe_name)
+                parsed = await parse_document_pdf(text, safe_name, request)
                 version_dir = doc.path.parent / 'versions'
                 version_dir.mkdir(exist_ok=True)
                 version = version_dir / (parsed.raw_hash + '.pdf')
@@ -826,19 +827,36 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                                expected_revision=doc.revision, remove=True))
 
     @app.post('/api/documents/{identity}/reparse')
-    async def reparse_document(identity: str, expected_source_id: str):
+    async def reparse_document(identity: str, expected_source_id: str, request: Request):
         doc = catalog.get(identity)
         source = _source_for(doc)
         if doc.path.suffix.lower() != '.pdf' or source.source_id != expected_source_id:
             raise HTTPException(409, detail='仅能重新解析当前版本的 PDF，请先刷新资料。')
-        from pdf_parser import raw_path, parse_pdf
+        from pdf_parser import raw_path
         data = raw_path(source).read_bytes()
         try:
-            parsed = await run_in_threadpool(parse_pdf, data, raw_file=source.document.raw_file)
+            parsed = await parse_document_pdf(data, source.document.raw_file, request)
         except (ValueError, OSError) as exc:
             raise HTTPException(400, detail=str(exc)) from exc
         return learning_action(lambda: library.change_document(identity, source, expected_source_id,
                                expected_revision=doc.revision, document=parsed))
+
+    async def parse_document_pdf(data, raw_file, request):
+        from pdf_parser import parse_pdf, profile
+        config = await run_in_threadpool(profile)
+
+        def parse():
+            result = parse_pdf(data, raw_file=raw_file, config=config)
+            # Local parsing is cooperative too: cancellation must prevent publish
+            # even when it arrives after the last remote request has completed.
+            checkpoint()
+            return result
+
+        if config.get('vlm'):
+            # Admit the complete VLM-enabled parse before any page requests.
+            # Reusing run preserves disconnect cancellation and real-work release.
+            return await streams.run(parse, request)
+        return await run_in_threadpool(parse)
 
     def resolve_scope(document_ids, focus_document_id, focus_source_id, line_start, line_end):
         if len(set(document_ids)) != len(document_ids):
@@ -1094,6 +1112,24 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return await streams.response(action, request=request,
             after_released=lambda: streams.title(conversations, identity, payload.response_language))
 
+    @app.post("/api/conversations/{identity}/turns/{turn_id}/retry/stream")
+    async def stream_retry_turn(identity: str, turn_id: str, payload: RetryTurnRequest, request: Request):
+        def action(event_sink):
+            def retry():
+                turn = conversations.turn(turn_id)
+                if turn['conversation_id'] != identity:
+                    raise KeyError('轮次不属于当前聊天。')
+                def notify(event, data):
+                    if event == 'meta':
+                        data = {**data, 'trace_id': request.headers.get('X-Request-ID', '')[:128]}
+                    event_sink(event, data)
+                return execute_turn(identity, turn['request_id'], turn['request'],
+                                    payload.response_language, payload.retrieval_mode, event_sink=notify)
+            return conversation_action(retry)
+        return await streams.response(action, request=request,
+            after_released=lambda: streams.title(conversations, identity,
+                payload.response_language or conversations.turn(turn_id)['request'].get('response_language', 'zh')))
+
     @app.post("/api/conversations/{identity}/turns")
     @streams.bounded
     def submit_turn(identity: str, payload: TurnRequest, background_tasks: BackgroundTasks):
@@ -1146,6 +1182,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         return learning_action(action)
 
     @app.post('/api/conversations/{identity}/practice')
+    @streams.bounded
     def discussion_practice(identity: str, payload: ChatPracticeRequest):
         from chat_practice import start
         def action():
@@ -1282,6 +1319,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             mode=payload.mode, response_language=payload.response_language))
 
     @app.post("/api/learning/{item_id}/dimensions")
+    @streams.bounded
     def dimension(item_id: str, payload: DimensionRequest):
         return learning_action(lambda: add_dimension(practice_store, item_id, payload.capability,
             response_language=payload.response_language))
@@ -1313,7 +1351,17 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     return app
 
 
-app = create_app()
+_default_app_lock = Lock()
+
+
+def __getattr__(name):
+    """Keep uvicorn web_app:app compatible without opening stores on import."""
+    if name != 'app':
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    with _default_app_lock:
+        if 'app' not in globals():
+            globals()['app'] = create_app()
+        return globals()['app']
 
 
 if __name__ == "__main__":

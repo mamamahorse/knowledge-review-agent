@@ -1,0 +1,13 @@
+{
+  "proxy_variables_present": [],
+  "change": "only child process: remove proxy variables and set NO_PROXY/no_proxy=127.0.0.1,localhost",
+  "command": [
+    "E:\\agentic project\\knowledge-review\\.venv\\Scripts\\python.exe",
+    "-m",
+    "unittest",
+    "-v",
+    "test_answer_stream",
+    "test_agent_cancellation"
+  ],
+  "exit_code": 0
+}

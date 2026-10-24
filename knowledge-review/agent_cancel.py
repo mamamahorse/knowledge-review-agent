@@ -1,8 +1,8 @@
 """Cooperative request cancellation without killing Python worker threads.
 
 Only StreamRunner work binds a token. Existing CLI/background calls keep their
-original OpenAI transport. The synchronous SDK still receives complete JSON;
-its HTTP exchange runs on an owned async client so cancellation can close I/O.
+original OpenAI transport. Responses own an async client and event loop until
+their synchronous byte stream closes, allowing incremental reads and cancellation.
 """
 import asyncio
 from contextlib import contextmanager
@@ -50,34 +50,16 @@ def checkpoint():
         token.check()
 
 
-class CancellableTransport(httpx.BaseTransport):
+class CancellableBody(httpx.SyncByteStream):
     def __init__(self, token):
         self.token = token
+        self.runner = asyncio.Runner()
+        self.client = None
+        self.response = None
+        self.closed = False
 
-    def handle_request(self, request):
-        self.token.check()
-        # These SDK paths send bounded, already serialized JSON, not streaming
-        # uploads. Copy before entering asyncio so no sync iterator runs there.
-        content = request.read()
-        return asyncio.run(self._exchange(request, content))
-
-    async def _exchange(self, request, content):
-        async def exchange():
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                outbound = httpx.Request(request.method, request.url, headers=request.headers,
-                                         content=content, extensions=request.extensions)
-                response = await client.send(outbound, stream=True)
-                try:
-                    # Keep wire encoding intact: the outer sync httpx client
-                    # performs its normal decompression exactly once.
-                    body = b"".join([block async for block in response.aiter_raw()])
-                    return httpx.Response(response.status_code, headers=response.headers, content=body,
-                                          extensions={key: value for key, value in response.extensions.items()
-                                                      if key in ("http_version", "reason_phrase")})
-                finally:
-                    await response.aclose()
-
-        task = asyncio.create_task(exchange())
+    async def wait(self, operation):
+        task = asyncio.create_task(operation)
         try:
             while not task.done():
                 self.token.check()
@@ -90,6 +72,58 @@ class CancellableTransport(httpx.BaseTransport):
             # Await async cleanup before returning to the worker / releasing
             # its permit; merely cancelling a Future is not completion.
             await asyncio.gather(task, return_exceptions=True)
+
+    async def open(self, request):
+        self.client = httpx.AsyncClient(follow_redirects=True)
+        outbound = httpx.Request(request.method, request.url, headers=request.headers,
+                                 content=request.read(), extensions=request.extensions)
+        self.response = await self.client.send(outbound, stream=True)
+        return self.response
+
+    def __iter__(self):
+        iterator = self.response.aiter_raw().__aiter__()
+        try:
+            while True:
+                try:
+                    block = self.runner.run(self.wait(anext(iterator)))
+                except StopAsyncIteration:
+                    break
+                yield block
+        finally:
+            self.close()
+
+    async def cleanup(self):
+        try:
+            if self.response is not None:
+                await self.response.aclose()
+        finally:
+            if self.client is not None:
+                await self.client.aclose()
+
+    def close(self):
+        if not self.closed:
+            self.closed = True
+            try:
+                self.runner.run(self.cleanup())
+            finally:
+                self.runner.close()
+
+
+class CancellableTransport(httpx.BaseTransport):
+    def __init__(self, token):
+        self.token = token
+
+    def handle_request(self, request):
+        self.token.check()
+        stream = CancellableBody(self.token)
+        try:
+            response = stream.runner.run(stream.wait(stream.open(request)))
+            return httpx.Response(response.status_code, headers=response.headers, stream=stream,
+                                  extensions={key: value for key, value in response.extensions.items()
+                                              if key in ("http_version", "reason_phrase")})
+        except BaseException:
+            stream.close()
+            raise
 
 
 def model_http_options():

@@ -146,6 +146,27 @@ class StreamApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(self.store.turns(self.chat), [])
 
+    def test_failed_turn_can_retry_as_stream_without_creating_another_turn(self):
+        with patch('web_app.run_agent', side_effect=RuntimeError('public failure')), patch('web_app.load_dotenv'):
+            self.client.post(self.url, json=self.payload)
+        original = self.store.turns(self.chat)[0]
+        retry_url = f'/api/conversations/{self.chat}/turns/{original["id"]}/retry/stream'
+        other = self.store.create('Other chat')['id']
+        wrong = retry_url.replace(self.chat, other)
+        self.assertEqual(self.client.post(wrong, json={}).status_code, 404)
+        def answer(*args, **kwargs):
+            kwargs['event_sink']('delta', {'text': 'Public answer'})
+            return self.run
+        with patch('web_app.run_agent', side_effect=answer), patch('web_app.load_dotenv'):
+            response = self.client.post(retry_url, json={'response_language': 'en'})
+        self.assertEqual(response.status_code, 200)
+        parsed = events(response.text)
+        self.assertIn('delta', [event for event,_ in parsed])
+        self.assertEqual(parsed[-1][1]['status'], 'completed')
+        turns = self.store.turns(self.chat)
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(turns[0]['id'], original['id'])
+
     def test_missing_conversation_and_schema_are_http_errors(self):
         self.assertEqual(self.client.post(self.url, json={}).status_code, 422)
         self.assertEqual(self.client.post(self.url, json={**self.payload, "question": "  "}).status_code, 400)

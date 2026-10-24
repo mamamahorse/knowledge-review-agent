@@ -1,5 +1,11 @@
 # Knowledge Review 开发约定
 
+2026-10-24发布整理：用户明确授权固定可复现版本并做Git管理，本轮允许本地提交和配套标签；不推送、不启动/重建常驻部署、不调用真实模型或执行容量实验。基线见docs/RELEASE_BASELINE.md；此前“不自动提交”的历史约定不限制本次明确授权。
+
+2026-10-24审计修复：普通导入web_app/create_app不再初始化默认数据库；显式访问web_app.app时通过模块__getattr__和锁创建一次默认应用，原uvicorn web_app:app保持兼容。PDF导入/替换/重解析在PDF_VLM_ENABLED启用时整次解析占用原StreamRunner工作槽，满时503/Retry-After且不发布资料；断连请求取消，真实工作退出后释放。纯本地解析仍走普通线程池。该最小修复会让VLM启用时的本地解析阶段也占槽，未新增按页调度。新增8项及相关66项受控回归通过，无外部模型或部署验收。Embedding计时方案与预算调研分别见docs/embedding-performance-plan.md、docs/context-budget-research.md，尚未实现模型池或改预算算法。
+
+2026-10-22当前更新：网页可通过独立C++ Gateway同源访问，使用HttpOnly会话Cookie。聊天新提问和失败重试使用POST SSE，最终模型生成期间直接增量发送回答正文；引用、结构化校验和SQLite保存完成后发送正式result/done。停止生成沿用请求取消，JSON/CLI保持。旧“不是逐token/网页未接入”属于阶段历史。说明见[WEB_AND_TOKEN_STREAM.md](docs/WEB_AND_TOKEN_STREAM.md)。本次不迁移原业务数据、不进行容量实验、不自动提交或推送。
+
 2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
 
 

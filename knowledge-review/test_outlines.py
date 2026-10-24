@@ -189,6 +189,18 @@ class OutlineTests(unittest.TestCase):
             enroll_candidate(self.store, candidate['id'], 1, 'root', None, 'zh', self.current)
         self.assertEqual(self.counts(), [1, 1, 1, 0, 1])
 
+    def test_cancelled_seed_releases_enrollment_state_for_retry(self):
+        from agent_cancel import GenerationCancelled
+        _, candidate = self.generated()
+        with patch('outline_service._request_structured', side_effect=GenerationCancelled()):
+            with self.assertRaises(GenerationCancelled):
+                enroll_candidate(self.store, candidate['id'], 1, 'root', None, 'zh', self.current)
+        self.assertEqual(self.counts(), [0, 0, 0, 0, 0])
+        self.assertEqual(self.store.candidate(candidate['id'])['status'], 'proposed')
+        with patch('outline_service._request_structured', side_effect=fake_model):
+            enroll_candidate(self.store, candidate['id'], 1, 'root', None, 'zh', self.current)
+        self.assertEqual(self.counts(), [1, 1, 1, 0, 1])
+
     def test_changed_scope_blocks_enrollment_and_changes_during_generation_reject_publication(self):
         identity, candidate = self.generated()
         changed = lambda _: [{**self.snapshots[0], 'source_id': 'new-version'}]

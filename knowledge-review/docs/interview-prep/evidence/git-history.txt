@@ -1,0 +1,4 @@
+61be7fb 2026-10-20 some changes with the gateway
+d86372e 2026-10-15 feat: add memory, collection learning and evaluated hybrid search
+ae20da7 2026-10-03 feat: complete local learning loop with FSRS review
+df36eaa 2026-09-28 completed the agent_loop

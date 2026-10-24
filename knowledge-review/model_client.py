@@ -50,6 +50,7 @@ def answer_question(
     memory_tools=None, memory_references: list | None = None, before_request=None,
     completed_actions: list[dict] | None = None,
     visual_observations: list[dict] | None = None,
+    on_delta=None,
 ) -> NoteAnswer:
     if not question.strip():
         raise ValueError("The question must not be blank.")
@@ -134,6 +135,7 @@ def answer_question(
                 if before_request:
                     before_request()
             generated = request_structured(client, model, messages, schema, budget=budget,
+                                           **({'on_delta': on_delta} if on_delta is not None else {}),
                                            **({'before_request': guard} if memory_tools or before_request else {}))
             result = NoteAnswer.model_validate(generated.model_dump(exclude={"history_references"}))
     except APIError as exc:

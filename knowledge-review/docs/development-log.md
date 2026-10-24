@@ -461,3 +461,55 @@ Git边界、克隆后哪些内容不能恢复及后续按功能提交的建议�
 标题最多1个；workers>1时至少保留一个未占槽，单worker只在空闲启动且不抢占。忙时跳过无等待队列，失败用已有title_started_at冷却30秒。增加内部GET /internal/metrics，只在进程内聚合request/background/title；Gateway通过受Key保护的GET /agent-metrics固定代理读取。/metrics仍是Gateway本地请求观察，两者不能混同。Agent端口不要直接对不可信网络开放。
 
 相关回归255项（含新增治理16项）、普通/ASan同批103项、真实受控链路与容器各同12组治理检查通过；工具/源码同步最终状态以独立Gateway的evidence/m233-verification-20261020.json为准。原Python不是全量discover，本轮没有外部模型/回答质量/embedding-RAG验收。进程重启计数重置，中断工作沿用原恢复后显式继续，不自动重放。CPU/文件/SQLite/DNS等阻塞不强杀，供应商远端停算未验证，分布式并发/V3仍未实现。详细改动理由、字段、接口和命令见Gateway仓库docs/JOB_GOVERNANCE.md；继续维护其docs/DEVELOPMENT_LOG.md。未自动提交或推送。
+
+## 2026-10-22：网页联合运行与真实模型增量读取
+
+**目标与改动原因：** 用户要求完成网页联合运行并增加模型逐token展示。原Gateway仅开放部分API，页面和PDF图片无法同源读取；原CancellableTransport把异步响应拼成完整bytes，SDK即使使用stream=True也要等完整响应。现增加明确页面/业务白名单、进程内随机HttpOnly会话Cookie和同源写入校验，Cookie不传给Agent。同步SDK响应体现在逐块驱动拥有的异步客户端，取消时先关闭I/O再归还实际工作槽。
+
+**增量与保存的关系：** 最终模型请求沿用原Schema及协议回退；仅增量解码blocks[].text，处理跨块字符串、转义和Unicode代理对，不显示工具决策/隐藏推理/原始JSON。SSE delta采用有界队列背压和单事件大小限制；网页TextDecoder按事件边界解析并显示预览，最终仍经原引用/结构校验及SQLite保存才发送result/done。停止、断流或校验失败不会把预览保存成完成答案。新提问和失败重试均支持。
+
+**实际问题与定位：** 首次C++编译发现Python路由DELETE名称不能直接作为C++枚举，改为Beast的delete_。旧代理测试把删除文档视为未开放，新增真实网页契约后该假设失效，将非法方法测试改为仍未开放的OPTIONS，23项代理检查随后通过。Windows本地模型测试最初收到VPN代理的502且本地服务未接到请求；只为测试设置NO_PROXY=localhost,127.0.0.1后正常。取消耗时的最初断言含SDK首次初始化，改为从实际取消信号计时；Windows主动断连可抛ConnectionAbortedError，测试服务统一按OSError记录关闭。
+
+**网页新增入口的生命周期：** 集合/聊天出题、清单候选加入、掌握维度生成这4个既有模型接口接入共享工作池。代码核查确认评分修订correct_grade仅校验和保存，不调用模型，因此保留普通请求分类。聊天出题和候选加入原错误清理不捕获GenerationCancelled，接入取消后会遗留运行/加入中状态，现补明确取消清理与提交前检查点，保持原请求可重试；不更改数据库Schema或强杀线程。
+
+**运行与检查边界：** 使用已安装Docker Desktop，新增tools/start_local.py导出公开上下文并启动持久化三服务；模型凭据在忽略的运行文件中，原资料和数据库不迁移。内置浏览器工具缺少运行资产，改用独立无界面Edge/Playwright及公开测试Key检查真实页面。页面登录、上传、PDF图片、生成预览、保存引用、停止和流式重试已完成受控浏览器检查，无页面/接口错误；最终检查与真实模型结果以当日过程记录和evidence为准。容量实验和全面语义质量不在本轮范围，未自动提交或推送。
+
+### 收尾：适配安装与跨平台问题
+
+安装器发现agent_stream.py仍为旧资产，拒绝输出SHA不匹配的更新。根因是早期资产在集成根目录、后续资产在runtime目录，生成器按asset而非目标path查找；已按path去重，保留原标准位置与已知升级SHA，42个目标唯一且实际源码/资产一致。新增重复目标拒绝检查发生在任何写入前，保持未知用户修改不覆盖。
+
+Windows下5个安装测试初次均被误判越界；比较发现子路径resolve、根路径未resolve，临时目录短路径/拼写不同。prepare入口规范project/bundle/output根，不放松符号链接和越界保护。其后一项测试又因write_text将LF写成CRLF而与预定SHA不同，测试改写固定bytes，5项通过。
+
+105项隔离Python相关检查有1项因未复制.env而在前置配置校验返回409；仅测试子进程补公开假LLM配置后该项通过。原失败日志保留，不称105项一次全绿。最终三服务与89份运行文件身份、受控浏览器及真实模型SSE结果记录于独立Gateway的docs/development/2026-10-22-web-and-token-stream.md；Python项目同名说明引用独立Gateway记录。
+
+## 2026-10-23：网页连接失败缓存、重复登录与取消后的弹窗循环
+
+**现象与复现：** gateway.js首次探测使用固定ready Promise，网络失败或503后后续业务始终复用同一失败；并发请求迟到的401可在登录完成后再次弹窗；等待login Promise的请求收到AbortSignal仍不退出。旧版9项隔离Edge场景4通过、5失败。限流/繁忙JSON使用error.code，但原页面只识别detail，因此用户只看到笼统失败。
+
+**定位与修复：** ensureReady仅在失败时清除当前初始化Promise，让后续操作重探；authVersion标记成功登录代次，只有属于当前旧代次的401才打开/等待登录。waitFor为单个调用注册并清理abort监听，不取消共享登录。错误映射只处理已知Gateway错误，保留原Python响应；Retry-After只展示有效整数，不调度自动重试。只有明确在转发前拒绝的401最多重发一次。
+
+**完整页面又发现的根因：** 增加取消登录按钮后，sendChatSubmission的finally仍无条件loadChat，新的鉴权请求立即再次弹窗。区分本请求controller主动停止与登录取消；后者恢复发送按钮并保留输入，不发起自动历史请求。真正生成取消的历史确认仍保留。完整UI检查先失败、修复后通过。
+
+**测试工具问题：** 部署前覆盖app.js的匹配最初遗漏?v=...，实际仍加载旧脚本，导致修复后表象不变。记录请求和页面状态后定位，匹配查询参数并断言实际覆盖一次；最终使用没有任何源文件覆盖的镜像再次通过。临时请求/页面日志不含Key或私人资料。
+
+**结果与边界：** 新增登录取消场景后10项浏览器检查、原SSE解码5项、最终镜像页面的限流/过载/输入与request_id保留/取消与重连全部通过；三服务healthy、89份运行文件与当前源码匹配。本轮不增加模型调用、容量实验或全量回归，也不自动提交/推送。步骤和命令见Gateway的docs/development/2026-10-23-web-recovery.md。
+
+## 2026-10-24：审计发现的导入副作用与PDF VLM准入修复
+
+**实际问题：** 导入web_app工厂时模块级默认应用先打开真实默认库；PDF导入/替换/重解析的VLM路径在普通线程池执行，未使用聊天准入。用户要求修复两项，Embedding先给方案，预算先查成熟项目。
+
+**改动及理由：** 默认app通过模块__getattr__按需装配，锁内缓存，保留uvicorn web_app:app兼容；普通导入不创建Store。三条PDF路径共用parse_document_pdf，VLM启用时整次解析通过原StreamRunner.run，复用503、断连取消及实际Future退出后释放。返回前checkpoint防止取消后发布；纯本地解析仍用原线程池。整次启用VLM的本地解析阶段也占槽，是最小生命周期复用的容量代价；未新建逐页调度器。
+
+**验证：** 新增8项（8.888秒）与既有网页/PDF/准入/治理/SSE 66项（34.860秒）通过，日志audit-fixes-new-tests-20261024.txt和audit-fixes-tests-20261024.txt位于.data/evaluations。新取消测试最初同进程ASGITransport普通读取挂起，改用可控Request断连；初始另一请求缺字段422，补齐用例后通过，未放松业务校验。合成PDF/受控转写，不代表真实VLM效果。没有全量discover、重启/重建部署或提交/推送。
+
+**评审材料：** docs/embedding-performance-plan.md明确计时边界、四场景及复用判定，尚未实施；docs/context-budget-research.md核对Dify/LiteLLM/LlamaIndex/LangChain与供应商官方资料，建议成熟tokenizer/模型适配、全协议计数及安全回退，没有改generation_budget或模型。完整修复与Python语法解释见docs/audit-fixes-20261024.md。
+
+## 2026-10-24：固定配套版本与干净检出
+
+用户明确授权本地Git管理，固定Python/Gateway配套源码版本并先设计网关实验。本轮不推送，不启动或重建常驻部署，不做真实模型或容量调用。
+
+发现两类漂移：最新web_app导入隔离/PDF VLM准入修复与两个新增测试尚未进入网关适配资产；两仓库core.autocrlf=true会在新检出时改变文本字节，而安装清单使用精确SHA。现同步44个唯一安装目标，保留旧版本升级SHA，Python运行文本与适配目标固定LF，Gateway安装资产-text原样保存；冻结检索语料不参与换行整理。
+
+使用两个Git提交及同名interview-baseline-20261024标签配对；Gateway release/baseline.json记录Python提交与全部公开运行文件SHA，tools/check_release.py验证标签、干净的已跟踪内容、运行文件及安装资产。验证器不导入应用、不读凭据、不打开业务库。常驻实例没有重建，不把新源码版本称为已经部署。
+
+Git只显式暂存本轮清单；个人环境/数据库/模型/原始日志继续忽略，父目录设计稿和项目上下文原稿保持未跟踪。基线后的干净克隆验证结果、命令和环境保存于Gateway build/release-20261024，标签附注记录完成摘要；新实验方案仍是待执行计划。

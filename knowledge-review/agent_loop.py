@@ -275,6 +275,8 @@ def run_agent(
                              **({'visual_observations': visual_observations} if visual_observations else {}),
                              completed_actions=[{'name':s.name,'status':'failed' if s.error is not None else 'ok'} for s in steps],
                              **({'before_request': before_request} if before_request else {}),
+                              **({'on_delta': lambda text: event_sink('delta', {'text': text})}
+                                 if event_sink is not None else {}),
                              **({"memory_tools": memory_tools, "memory_references": history_references}
                                 if memory_tools else {}))
     if memory_tools and conversation_context:

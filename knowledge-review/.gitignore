@@ -5,6 +5,7 @@ __pycache__/
 !.env.example
 .models/
 .data/
+.firecrawl/
 
 # Local databases include notes, conversations, answers, and cached vectors.
 *.sqlite

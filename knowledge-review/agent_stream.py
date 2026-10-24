@@ -80,10 +80,23 @@ class EventBridge:
         frame = encode(event, data, 8192)
         if self.progress_bytes + len(frame) > self.progress_limit:
             raise EventLimit("SSE progress budget exhausted")
-        try:
-            self.queue.put_nowait(frame)
-        except Full as exc:
-            raise EventLimit("SSE progress queue exhausted") from exc
+        if event == 'delta':
+            # Model bursts must apply backpressure rather than lose text or fail
+            # merely because the consumer polls less often than token arrival.
+            while True:
+                checkpoint()
+                if self.detached.is_set():
+                    return
+                try:
+                    self.queue.put(frame, timeout=0.02)
+                    break
+                except Full:
+                    continue
+        else:
+            try:
+                self.queue.put_nowait(frame)
+            except Full as exc:
+                raise EventLimit("SSE progress queue exhausted") from exc
         self.progress_bytes += len(frame)
         if event == "meta":
             self.turn_id = data["turn_id"]

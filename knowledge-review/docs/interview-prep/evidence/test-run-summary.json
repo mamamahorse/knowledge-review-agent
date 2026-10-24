@@ -1,0 +1,31 @@
+{
+  "command": [
+    "E:\\agentic project\\knowledge-review\\.venv\\Scripts\\python.exe",
+    "-m",
+    "unittest",
+    "-v",
+    "test_hybrid_retrieval",
+    "test_production_retrieval",
+    "test_embeddings",
+    "test_vector_index",
+    "test_chunking",
+    "test_context",
+    "test_answers",
+    "test_agent_loop",
+    "test_model_client",
+    "test_conversations",
+    "test_conversation_memory",
+    "test_structured_output",
+    "test_answer_stream",
+    "test_agent_sse",
+    "test_agent_admission",
+    "test_agent_cancellation",
+    "test_agent_governance",
+    "test_rerank_retrieval",
+    "test_pdf_documents",
+    "test_table_reading"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 98.192,
+  "environment_change": "child process only, localhost direct; no business code or global settings changed"
+}

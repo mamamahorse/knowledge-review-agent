@@ -1,5 +1,9 @@
 # Knowledge Review
 
+2026-10-24固定源码基线：[版本与复现说明](docs/RELEASE_BASELINE.md)。配套Gateway以同名interview-baseline-20261024标签固定；不包含个人资料与凭据，现有运行实例没有因本次Git整理而重新部署。
+
+2026-10-22当前更新：网页可通过独立C++ Gateway同源访问，使用HttpOnly会话Cookie。聊天新提问和失败重试使用POST SSE，最终模型生成期间直接增量发送回答正文；引用、结构化校验和SQLite保存完成后发送正式result/done。停止生成沿用请求取消，JSON/CLI保持。旧“不是逐token/网页未接入”属于阶段历史。说明见[WEB_AND_TOKEN_STREAM.md](docs/WEB_AND_TOKEN_STREAM.md)。本次不迁移原业务数据、不进行容量实验、不自动提交或推送。
+
 2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
 
 

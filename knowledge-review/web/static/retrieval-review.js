@@ -4,7 +4,7 @@ let overview = null, current = null, edited = null, revision = 0, dirty = false,
 function el(tag, text, cls) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; }
 function notice(text) { $('message').textContent = text; }
 async function api(path, options) {
-  const response = await fetch('/api/retrieval-benchmark' + path, options);
+  const response = await (window.gatewayFetch || fetch)('/api/retrieval-benchmark' + path, options);
   const body = await response.json();
   if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : '输入格式不符合要求。');
   return body;

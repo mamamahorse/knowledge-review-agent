@@ -120,6 +120,19 @@ class ManagementAndChatPracticeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.generate()
 
+    def test_cancelled_discussion_question_keeps_request_retryable(self):
+        from agent_cancel import GenerationCancelled
+        def cancel(*args, **kwargs):
+            raise GenerationCancelled()
+        with self.assertRaises(GenerationCancelled):
+            self.generate(generator=cancel)
+        with closing(self.store._connect()) as db:
+            row = db.execute('SELECT status,attempt FROM chat_practice_jobs').fetchone()
+        self.assertEqual(row['status'], 'failed')
+        self.assertIsNone(row['attempt'])
+        self.assertEqual(self.store.list(), [])
+        self.assertEqual(self.generate()['status'], 'completed')
+
     def test_delete_during_generation_revokes_late_result(self):
         def deleted(messages, schema, **kwargs):
             result = self.generator(messages, schema, **kwargs)
