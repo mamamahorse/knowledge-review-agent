@@ -43,6 +43,7 @@ from context import format_context
 from structured_output import structured_protocols
 from library_store import LibraryStore
 from outline_store import OutlineStore, OutlineBusy
+from task_routing import TaskRouter, capabilities
 from outline_service import (scope_fingerprint, run_outline, public_outline,
                              candidate_context, edit_candidate, enroll_candidate, require_current)
 
@@ -203,6 +204,17 @@ class RetryTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     response_language: ResponseLanguage | None = None
     retrieval_mode: Literal['dense', 'hybrid'] | None = None
+    clarification: dict | None = None
+    save_only: bool = False
+
+
+class ClarificationReply(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    card_id: str = Field(min_length=1, max_length=100)
+    revision: int = Field(ge=1)
+    response_id: str = Field(min_length=1, max_length=100)
+    option_id: str | None = Field(default=None, max_length=100)
+    text: str = Field(default='', max_length=4000)
 
 
 class ChatPracticeRequest(BaseModel):
@@ -449,6 +461,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
         return templates.TemplateResponse(request, "index.html", {
+            'task_capabilities': capabilities(),
             "asset_version": str(max(p.stat().st_mtime_ns for p in (ROOT / "web" / "static").iterdir() if p.is_file())),
         })
 
@@ -879,7 +892,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=400, detail="选段行号不在原文范围内。")
         return sources, documents_by_id, focus_source
 
-    def generate_answer(payload: AskRequest, conversation_context=None, budget=None, resolved_scope=None, diagnostics=None, event_sink=None):
+    def generate_answer(payload: AskRequest, conversation_context=None, budget=None, resolved_scope=None, diagnostics=None, event_sink=None, selected_task=None):
         if not payload.question.strip():
             raise HTTPException(status_code=400, detail="请输入问题。")
         sources, documents_by_id, focus_source = resolved_scope or resolve_scope(
@@ -888,6 +901,10 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         )
         sources_by_path = {source.path: source for source in sources}
         try:
+            if selected_task and selected_task not in ('explain', 'recall_discussion'):
+                control = TaskRouter().execute('select_task', {'task_id': selected_task})
+                guard_documents(list(documents_by_id.values()), sources)
+                return {'control': control}, conversation_context.snapshot() if conversation_context else {}
             tools = KnowledgeTools(sources, select_embedding_config("e5-small"), retrieval_mode=payload.retrieval_mode,
                                    index_path=practice_store.path.parent/'embeddings.sqlite3')
             if diagnostics is not None:
@@ -899,6 +916,8 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             if conversation_context is not None:
                 extra["memory_tools"] = ConversationMemory(conversations, conversation_context.memory_dependencies[0]["conversation_id"],
                                                            conversation_context.memory_dependencies)
+                if selected_task is None:
+                    extra['task_router'] = TaskRouter()
             if event_sink is not None:
                 extra["event_sink"] = event_sink
             run = run_agent(sources, payload.question, tools, strict=payload.strict, focus=focus,
@@ -913,6 +932,9 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             # Provider exceptions can echo request data. Do not log chat contents.
             LOGGER.error("Question run failed (%s)", type(exc).__name__)
             raise HTTPException(status_code=502, detail="问答未完成，请检查终端中的模型配置或错误信息。")
+
+        if getattr(run, 'control', None):
+            return {'control': run.control}, run.context_snapshot
 
         doc_id_by_source = {
             sources_by_path[doc.path.resolve()].source_id: doc_id
@@ -963,7 +985,24 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     def public_turn(turn):
-        return {k: turn[k] for k in ("id", "seq", "request_id", "status", "error", "messages", "context", "memory_valid")}
+        return {k: turn[k] for k in ("id", "seq", "request_id", "status", "error", "messages", "context", "memory_valid", "control")}
+
+    @app.get('/api/task-capabilities')
+    def task_capabilities():
+        return capabilities()
+
+    @app.post('/api/conversations/{identity}/turns/{turn_id}/clarification')
+    def answer_clarification(identity: str, turn_id: str, payload: ClarificationReply):
+        def action():
+            try:
+                conversations.answer_clarification(identity, turn_id, payload.card_id, payload.revision,
+                    payload.response_id, payload.option_id, payload.text)
+            except ConversationBusy:
+                raise
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            return public_turn(conversations.turn(turn_id))
+        return conversation_action(action)
 
     @app.get("/api/conversations")
     def list_conversations(archived: bool = False):
@@ -1041,7 +1080,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             turn = conversations.begin(identity, request_id, request_data)
             if event_sink is not None:
                 event_sink("meta", {"request_id": request_id, "turn_id": turn["id"]})
-            if turn["status"] == "completed":
+            if turn["status"] == "completed" or (turn['status'] == 'waiting_user' and not turn['control'].get('answer')):
                 return public_turn(turn)
             diagnostics = {}
             try:
@@ -1054,6 +1093,12 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 if retry_retrieval_mode is not None:
                     effective['retrieval_mode'] = retry_retrieval_mode
                 payload = AskRequest.model_validate(effective)
+                selection = (turn.get('control') or {}).get('answer')
+                selected_task = selection.get('option_id') if selection else None
+                if selection:
+                    from task_routing import TASKS
+                    clarification = selection['text'] or TASKS[selected_task][0]
+                    payload.question += '\n\n用户对任务的明确补充：' + clarification
                 diagnostics['retrieval'] = {'mode':payload.retrieval_mode,'searches':[]}
                 load_dotenv(ROOT / ".env")
                 budget = GenerationBudget.from_env()
@@ -1073,10 +1118,20 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 if event_sink is not None:
                     event_sink("progress", {"phase": "context", "status": "completed"})
                 result, snapshot = generate_answer(payload, background, budget, scope, diagnostics,
-                                                   **({"event_sink": event_sink} if event_sink is not None else {}))
+                                                   **({"event_sink": event_sink} if event_sink is not None else {}),
+                                                   **({'selected_task': selected_task} if selected_task else {}))
                 snapshot = snapshot or background.snapshot()
                 snapshot['document_dependencies'] = [{'id': d.document_id, 'revision': d.revision} for d in scope[1].values()]
                 checkpoint()
+                if 'control' in result:
+                    control = result['control']
+                    if control['kind'] == 'clarification':
+                        conversations.wait_for_user(turn, control, snapshot)
+                        return public_turn(conversations.turn(turn['id']))
+                    result = dict(coverage='none', coverage_note='已识别任务，请在任务入口确认资料范围及具体对象。',
+                        blocks=[], steps=[], stop_reason='task_selected', task_action={**control,
+                            'document_ids': payload.document_ids, 'objective': payload.question,
+                            'focus_document_id': payload.focus_document_id, 'focus_source_id': payload.focus_source_id})
                 conversations.finish(turn["id"], turn["attempt"], result, snapshot or background.snapshot())
             except GenerationCancelled:
                 conversations.fail(turn["id"], turn["attempt"], "生成已取消，原始输入已保存，可以重试。", diagnostics)
@@ -1143,6 +1198,16 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     @app.post("/api/conversations/{identity}/turns/{turn_id}/retry")
     @streams.bounded
     def retry_turn(identity: str, turn_id: str, payload: RetryTurnRequest, background_tasks: BackgroundTasks):
+        if payload.clarification is not None:
+            try:
+                reply = ClarificationReply.model_validate(payload.clarification)
+            except ValueError as exc:
+                raise HTTPException(400, '澄清回答格式不合法。') from exc
+            saved = answer_clarification(identity, turn_id, reply)
+            if payload.save_only:
+                return saved
+        elif payload.save_only:
+            raise HTTPException(400, '保存澄清需要提供回答。')
         def action():
             turn = conversations.turn(turn_id)
             if turn["conversation_id"] != identity:

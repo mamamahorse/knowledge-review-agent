@@ -1,5 +1,7 @@
 # Knowledge Review
 
+2026-10-26：聊天支持任务识别与持久 `ask_question` 选择器；等待用户时释放执行资源，选择可恢复。业务任务通过明确的入口卡片进入原清单/练习/复习界面，不自动加入计划；大资料专门总结仍未接通。实现和验证边界见 [任务识别说明](docs/task-routing-implementation.md)。
+
 2026-10-24固定源码基线：[版本与复现说明](docs/RELEASE_BASELINE.md)。配套Gateway以同名interview-baseline-20261024标签固定；不包含个人资料与凭据，现有运行实例没有因本次Git整理而重新部署。
 
 2026-10-22当前更新：网页可通过独立C++ Gateway同源访问，使用HttpOnly会话Cookie。聊天新提问和失败重试使用POST SSE，最终模型生成期间直接增量发送回答正文；引用、结构化校验和SQLite保存完成后发送正式result/done。停止生成沿用请求取消，JSON/CLI保持。旧“不是逐token/网页未接入”属于阶段历史。说明见[WEB_AND_TOKEN_STREAM.md](docs/WEB_AND_TOKEN_STREAM.md)。本次不迁移原业务数据、不进行容量实验、不自动提交或推送。

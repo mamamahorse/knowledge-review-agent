@@ -60,6 +60,11 @@ class ConversationStore:
             turn_columns = {row["name"] for row in db.execute("PRAGMA table_info(turns)")}
             if "memory_valid" not in turn_columns:
                 db.execute("ALTER TABLE turns ADD COLUMN memory_valid INTEGER NOT NULL DEFAULT 1")
+            if 'control_json' not in turn_columns:
+                db.execute('ALTER TABLE turns ADD COLUMN control_json TEXT')
+                db.execute('DROP INDEX IF EXISTS one_pending_turn')
+                db.execute("CREATE UNIQUE INDEX one_pending_turn ON turns(conversation_id) "
+                           "WHERE status IN ('running','failed','waiting_user')")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS memory_dependencies (
                     turn_id TEXT NOT NULL REFERENCES turns(id), source_conversation_id TEXT NOT NULL,
@@ -254,11 +259,14 @@ class ConversationStore:
                     raise ConversationBusy("同一提交标识对应不同输入，请使用新的提交标识。")
                 if old["status"] == "completed":
                     return self.turn(old["id"])
-                if old["status"] != "failed":
+                if old['status'] == 'waiting_user':
+                    if not json.loads(old['control_json']).get('answer'):
+                        return self.turn(old['id'])
+                elif old["status"] != "failed":
                     raise ConversationBusy("该轮次正在处理或已跳过，不能再次提交。")
                 turn_id = old["id"]
             else:
-                pending = db.execute("SELECT id FROM turns WHERE conversation_id=? AND status IN ('running','failed')",
+                pending = db.execute("SELECT id FROM turns WHERE conversation_id=? AND status IN ('running','failed','waiting_user')",
                                      (identity,)).fetchone()
                 if pending:
                     raise ConversationBusy("上一条输入尚未完成，请先重试或跳过，再提交新问题。")
@@ -280,11 +288,51 @@ class ConversationStore:
             result = dict(row)
             result["request"] = json.loads(result.pop("request_json"))
             result["context"] = json.loads(result.pop("context_json") or "null")
+            result['control'] = json.loads(result.pop('control_json') or 'null')
             result["messages"] = [dict(m) for m in db.execute("SELECT * FROM messages WHERE turn_id=? "
                                                             "ORDER BY CASE role WHEN 'user' THEN 0 ELSE 1 END", (turn_id,))]
             for message in result["messages"]:
                 message["result"] = json.loads(message.pop("result_json") or "null")
             return result
+
+    def wait_for_user(self, turn, control, context):
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            old = db.execute('SELECT control_json FROM turns WHERE id=?', (turn['id'],)).fetchone()
+            previous = json.loads(old[0] or '{}') if old else {}
+            revision = previous.get('revision', 0) + 1
+            if revision > 3:
+                raise ConversationBusy('已多次澄清，请取消此输入并明确任务后重新提交。')
+            card = dict(control, id=uuid4().hex, revision=revision, answer=None)
+            changed = db.execute("UPDATE turns SET status='waiting_user',attempt=NULL,control_json=?,context_json=? "
+                "WHERE id=? AND status='running' AND attempt=?",
+                (json.dumps(card, ensure_ascii=False), json.dumps(context, ensure_ascii=False),
+                 turn['id'], turn['attempt'])).rowcount
+            if not changed:
+                raise ConversationBusy('轮次已变化，不能发布旧澄清。')
+
+    def answer_clarification(self, identity, turn_id, card_id, revision, response_id, option_id, text):
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM turns WHERE id=? AND conversation_id=?', (turn_id, identity)).fetchone()
+            if row is None:
+                raise KeyError('找不到这个聊天轮次。')
+            card = json.loads(row['control_json'] or '{}')
+            if card.get('id') != card_id or card.get('revision') != revision:
+                raise ConversationBusy('选择器已更新，请刷新后选择。')
+            answer = dict(response_id=response_id, option_id=option_id, text=text)
+            if card.get('answer'):
+                if card['answer'] != answer:
+                    raise ConversationBusy('这个选择器已经回答，不能重复修改。')
+                return
+            if row['status'] != 'waiting_user':
+                raise ConversationBusy('这个选择器不再等待回答。')
+            if bool(option_id) == bool(text.strip()):
+                raise ValueError('请选择一项或填写具体需求。')
+            if option_id and option_id not in [o['id'] for o in card['options']]:
+                raise ValueError('选项不属于当前选择器。')
+            card['answer'] = answer
+            db.execute('UPDATE turns SET control_json=? WHERE id=?', (json.dumps(card, ensure_ascii=False), turn_id))
 
     def finish(self, turn_id, attempt, result, context):
         text = "\n\n".join([result["coverage_note"]] + [b["text"] for b in result["blocks"]])
@@ -321,10 +369,10 @@ class ConversationStore:
 
     def skip(self, identity, turn_id):
         turn = self.turn(turn_id)
-        if turn["conversation_id"] != identity or turn["status"] != "failed":
+        if turn['conversation_id'] != identity or turn['status'] not in ('failed', 'waiting_user'):
             raise ConversationBusy("只能跳过本聊天尚未完成的输入。")
         with self.connection() as db:
-            db.execute("UPDATE turns SET status='cancelled' WHERE id=? AND status='failed'", (turn_id,))
+            db.execute("UPDATE turns SET status='cancelled' WHERE id=? AND status IN ('failed','waiting_user')", (turn_id,))
 
     def turns(self, identity, *, after=0, limit=100):
         self.get_conversation(identity)

@@ -15,7 +15,7 @@ async function consumeChatStream(response, onEvent) {
       if (data.length) {
         if (done) throw new Error('终态后收到额外回答事件。');
         const payload = JSON.parse(data.join('\n'));
-        if (event === 'result') turn = payload.turn;
+        if (event === 'result' || event === 'clarification') turn = payload.turn;
         if (event === 'done') { done = true; doneStatus = payload.status; }
         onEvent(event, payload);
       }
@@ -38,7 +38,7 @@ async function consumeChatStream(response, onEvent) {
       if (next.done) break;
     }
     if (buffer.length || data.length || !done) throw new Error('连接中断，请读取聊天记录确认保存状态。');
-    if (doneStatus !== 'completed' || turn?.status !== 'completed') throw new Error('生成未完成，输入已保存，可以重试。');
+    if (!['completed', 'waiting_user'].includes(doneStatus) || turn?.status !== doneStatus) throw new Error('生成未完成，输入已保存，可以重试。');
     return turn;
   } finally {
     await reader.cancel().catch(() => {});

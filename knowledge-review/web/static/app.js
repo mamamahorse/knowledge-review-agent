@@ -224,6 +224,30 @@ async function showCitation(citation) {
 
 function renderAnswer(result, container = $("answer-result")) {
   container.replaceChildren();
+  if (result.task_action) {
+    const action = result.task_action;
+    container.append(makeElement('h3', '', action.label), makeElement('p', '', action.description));
+    container.append(makeElement('p', 'coverage-note', '已识别任务，尚未创建清单、题目或复习记录。请在对应入口核对范围和对象。'));
+    const open = makeElement('button', 'practice-action', '打开任务入口'); open.type = 'button';
+    open.addEventListener('click', async () => {
+      try {
+        if (action.destination === 'practice') {
+          await openDocument(action.focus_document_id);
+          switchMode('practice');
+          $('practice-objective').value = action.objective.slice(0, 300);
+          setStatus('practice-status', '已打开原提问文档；请核对资料范围后开始练习或选择已有记录。');
+        } else {
+          switchMode('learning'); await refreshLearning();
+          if (action.destination === 'outline') {
+            $('outline-objective').value = action.objective.slice(0, 300);
+            $('outline-form').scrollIntoView({behavior: 'smooth', block: 'center'});
+            setStatus('outline-status', '请核对计划集合：清单分析使用此集合及子集合，可能不同于聊天所选资料。');
+          }
+        }
+      } catch (error) { setStatus('request-status', error.message, true); }
+    });
+    container.append(open); return;
+  }
   const heading = makeElement("div", "result-heading");
   heading.append(makeElement("h3", "", "回答"));
   const coverage = { sufficient: "依据充分", partial: "部分依据", none: "资料不足" };
@@ -369,7 +393,54 @@ function renderChat(data) {
       } else node.append(makeElement("p", "chat-original", message.content));
       card.append(node);
     }
-    if (turn.status === "failed") {
+    if (turn.status === 'waiting_user') {
+      const clarification = turn.control;
+      const identity = state.conversationId;
+      const panel = makeElement('section', 'selection-card');
+      panel.append(makeElement('strong', '', clarification.question));
+      const submit = async (optionId, text = '') => {
+        if (state.chatBusy) return;
+        panel.querySelectorAll('button,input').forEach(node => { node.disabled = true; });
+        try {
+          const key = `knowledge-review.clarification.${clarification.id}`;
+          const reply = {
+              card_id: clarification.id, revision: clarification.revision, response_id: crypto.randomUUID(),
+              option_id: optionId, text,
+          };
+          let saved = reply;
+          try { saved = JSON.parse(localStorage.getItem(key)) || reply; localStorage.setItem(key, JSON.stringify(saved)); } catch { }
+          await request(`/api/conversations/${identity}/turns/${turn.id}/retry`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({clarification: saved, save_only: true}),
+          });
+          try { localStorage.removeItem(key); } catch { }
+          await retryChatTurn(identity, turn.id);
+        } catch (error) {
+          setStatus('request-status', error.message, true); await loadChat(identity);
+        }
+      };
+      if (!clarification.answer) {
+        for (const option of clarification.options) {
+          const button = makeElement('button', 'practice-action', `${option.label}：${option.description}`);
+          button.type = 'button'; button.addEventListener('click', () => submit(option.id)); panel.append(button);
+        }
+        const text = makeElement('input', '', ''); text.maxLength = 4000;
+        text.placeholder = '也可以直接说明具体需求'; text.setAttribute('aria-label', '补充具体需求');
+        const send = makeElement('button', '', '提交补充'); send.type = 'button';
+        send.addEventListener('click', () => { if (text.value.trim()) submit(null, text.value); });
+        panel.append(text, send);
+      } else {
+        panel.append(makeElement('p', '', '选择已保存，可以继续执行。'));
+        const resume = makeElement('button', '', '继续'); resume.type = 'button';
+        resume.addEventListener('click', () => retryChatTurn(identity, turn.id)); panel.append(resume);
+      }
+      const cancel = makeElement('button', '', '取消此任务'); cancel.type = 'button';
+      cancel.addEventListener('click', async () => {
+        try { await request(`/api/conversations/${identity}/turns/${turn.id}/skip`, {method:'POST'}); await loadChat(identity); }
+        catch (error) { setStatus('request-status', error.message, true); }
+      });
+      panel.append(cancel); card.append(panel);
+    } else if (turn.status === "failed") {
       card.append(makeElement("p", "error", turn.error || "生成失败，输入已保存。"));
       const retry = makeElement("button", "chat-retry", "重试这条输入");
       retry.type = "button";
@@ -406,7 +477,7 @@ function renderChat(data) {
       summary.append(row);
     }
   }
-  $("ask-button").disabled = state.chatBusy || data.turns.some((t) => t.status === "failed" || t.status === "running");
+  $("ask-button").disabled = state.chatBusy || data.turns.some((t) => ['failed', 'running', 'waiting_user'].includes(t.status));
 }
 
 async function loadChat(id) {
@@ -456,6 +527,13 @@ async function newConversation() {
 }
 
 async function initializeChat() {
+  const catalog = $('task-capability-list');
+  if (catalog) {
+    try {
+      const items = JSON.parse($('task-capability-data').textContent); catalog.replaceChildren();
+      for (const item of items) catalog.append(makeElement('p', '', `${item.label}${item.available ? '' : '（规划中）'}：${item.description}`));
+    } catch { catalog.textContent = '功能目录暂未加载，可继续提问。'; }
+  }
   await refreshConversations();
   let saved;
   try { saved = localStorage.getItem("knowledge-review.conversation"); } catch { }
@@ -510,7 +588,7 @@ async function sendChatSubmission(id, payload, turnId = null) {
     try { localStorage.removeItem(pendingKey(id)); } catch { }
     if (state.conversationId === id) {
       $("question").value = "";
-      setStatus("request-status", turn.status === "completed" ? "回复已保存，可继续追问或切换聊天。" : (turn.error || "输入已保存，可重试。"), turn.status !== "completed");
+      setStatus("request-status", turn.status === 'waiting_user' ? '请选择需要完成的任务，等待期间不占用模型执行名额。' : turn.status === "completed" ? "回复已保存，可继续追问或切换聊天。" : (turn.error || "输入已保存，可重试。"), !['completed','waiting_user'].includes(turn.status));
       await loadChat(id);
     }
     await refreshConversations();

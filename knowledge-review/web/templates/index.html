@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/static/library.css?v={{ asset_version }}">
   <link rel="stylesheet" href="/static/gateway.css">
   <script src="/static/gateway.js" defer></script>
-  <script src="/static/chat-stream.js" defer></script>
+  <script src="/static/chat-stream.js?v={{ asset_version }}" defer></script>
   <script src="/static/app.js?v={{ asset_version }}" defer></script>
   <script src="/static/library.js?v={{ asset_version }}" defer></script>
   <script src="/static/learning.js?v={{ asset_version }}" defer></script>
@@ -126,6 +126,8 @@
         <button id="ask-button" class="primary-button" type="submit">发送 <span>↗</span></button>
       </form>
       <p id="request-status" class="request-status" role="status"></p>
+      <details id="task-help"><summary>可用任务与功能</summary><div id="task-capability-list"></div></details>
+      <script type="application/json" id="task-capability-data">{{ task_capabilities | tojson }}</script>
       <div id="answer-result" class="answer-result" aria-live="polite"></div>
       </section>
       <section id="learning-view" hidden>

@@ -1,5 +1,7 @@
 # Knowledge Review 开发约定
 
+2026-10-26：用户授权分阶段实现并本地 Git 提交任务识别/ask_question，然后在新 codex/ 分支实现清单 V2、配置约128k实验预算；真实模型对照须先交付方案并等待确认。任务识别已采用 task_routing 注册表、控制动作独占、waiting_user 持久卡片和显式任务入口；入口卡片不等于已启动业务。原 request_json 不覆盖，恢复重做来源校验，等待释放实际工作槽。说明见 docs/task-routing-implementation.md。保留旧算法，未经对照决策不切默认路径；未授权推送/部署。
+
 2026-10-24发布整理：用户明确授权固定可复现版本并做Git管理，本轮允许本地提交和配套标签；不推送、不启动/重建常驻部署、不调用真实模型或执行容量实验。基线见docs/RELEASE_BASELINE.md；此前“不自动提交”的历史约定不限制本次明确授权。
 
 2026-10-24审计修复：普通导入web_app/create_app不再初始化默认数据库；显式访问web_app.app时通过模块__getattr__和锁创建一次默认应用，原uvicorn web_app:app保持兼容。PDF导入/替换/重解析在PDF_VLM_ENABLED启用时整次解析占用原StreamRunner工作槽，满时503/Retry-After且不发布资料；断连请求取消，真实工作退出后释放。纯本地解析仍走普通线程池。该最小修复会让VLM启用时的本地解析阶段也占槽，未新增按页调度。新增8项及相关66项受控回归通过，无外部模型或部署验收。Embedding计时方案与预算调研分别见docs/embedding-performance-plan.md、docs/context-budget-research.md，尚未实现模型池或改预算算法。

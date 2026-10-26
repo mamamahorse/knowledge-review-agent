@@ -110,9 +110,10 @@ class EventBridge:
             return
         status = "failed"
         try:
-            if turn is not None and turn["status"] == "completed":
-                self.terminal = encode("result", {"turn": turn}, self.result_limit)
-                status = "completed"
+            if turn is not None and turn["status"] in ('completed', 'waiting_user'):
+                event = 'clarification' if turn['status'] == 'waiting_user' else 'result'
+                self.terminal = encode(event, {"turn": turn}, self.result_limit)
+                status = turn['status']
             else:
                 raise EventLimit("No completed result")
         except EventLimit:

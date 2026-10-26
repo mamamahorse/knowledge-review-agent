@@ -1,5 +1,13 @@
 # 开发问题与决策记录
 
+## 2026-10-26：任务识别与 ask_question
+
+问题：聊天只有问答结果，无法表达用户意图不明时的持久等待，也无法准确发现已有学习功能。实现稳定能力目录、ask_question/select_task、结果变体、等待卡片及回答幂等；复用原 retry/SSE 与业务入口以保持网关 URL 兼容。等待停止最终模型阶段并释放执行资源；原问题不覆盖。清单/练习使用明确任务入口而非暗中扩大资料集合或自动加入计划。未接通的完整资料总结标为规划能力。
+
+原36项 Agent/会话/SSE检查通过，随后包含新增等待协议的87项相关受控检查通过；后续补充 retry 保存兼容路径及前端解码检查，最终结果在下一条记录。未调用真实模型，不代表意图识别质量通过。
+
+最终定向执行88项通过（36.038s），Node对completed/waiting_user两种SSE终态的每个字节分割点及断流拒绝检查通过，两个前端脚本语法通过，git diff --check通过。这些是重叠回归，不与此前次数累加；无浏览器或外部模型质量验收。第一阶段本地提交后创建独立V2分支。
+
 2026-10-18 Gateway M2.2：网关已接入的7个JSON模型入口通过@streams.bounded与SSE共用实际工作槽，不改变原业务请求/成功响应或数据库；KNOWLEDGE_REVIEW_MODEL_WORKERS范围1–32，独立Python默认4、Compose默认2。池满503及Retry-After，提交前准入，真实Future完成才释放；HTTP超时或取消等待不提前释放。JSON原有BackgroundTasks标题、读取触发标题及后台202作业未纳入，完整模型取消仍未实现；前面SSE专用槽的描述属于旧阶段。原SSE12项、新增共享槽7项、相关原有80项回归通过；真实Gateway/Redis/Agent/可控本地模型8项通过，无外部模型或质量验收。执行python -m unittest -v test_agent_sse test_agent_admission验证；详情见docs/gateway-sse.md与独立Gateway项目docs/ADMISSION_CONTROL.md及evidence/m22-*。本次只做最小HTTP适配，保留原数据和配置，无自动提交/推送。
 
 
