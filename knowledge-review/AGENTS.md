@@ -1,5 +1,7 @@
 # Knowledge Review 开发约定
 
+V2实验分支：outline_v2.py按ContentBlock和完整请求预算直接提取，plan.version=2保存generation_budget/模型端点身份，恢复与实际SDK使用该预算。V1/legacy保留，API和网页仍默认V1。V2默认应用预算131072可配置，计数仍是UTF-8字节保守估算；未声称服务精确token计数。结构拆批父项superseded，主范围并集覆盖，辅助表头不单独产目标，失败/重试usage诊断保留。候选上限与截断触发有限拆分。尚无真实V1/V2质量/费用结论；docs/outline-v2-experiment-plan.md必须待本轮用户确认后才能执行。
+
 2026-10-26：用户授权分阶段实现并本地 Git 提交任务识别/ask_question，然后在新 codex/ 分支实现清单 V2、配置约128k实验预算；真实模型对照须先交付方案并等待确认。任务识别已采用 task_routing 注册表、控制动作独占、waiting_user 持久卡片和显式任务入口；入口卡片不等于已启动业务。原 request_json 不覆盖，恢复重做来源校验，等待释放实际工作槽。说明见 docs/task-routing-implementation.md。保留旧算法，未经对照决策不切默认路径；未授权推送/部署。
 
 2026-10-24发布整理：用户明确授权固定可复现版本并做Git管理，本轮允许本地提交和配套标签；不推送、不启动/重建常驻部署、不调用真实模型或执行容量实验。基线见docs/RELEASE_BASELINE.md；此前“不自动提交”的历史约定不限制本次明确授权。

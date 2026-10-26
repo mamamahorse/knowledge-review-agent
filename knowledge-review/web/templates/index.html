@@ -140,6 +140,8 @@
           <h3>知识点与学习目标清单</h3>
             <p class="practice-hint">按计划范围中的集合及子集合整理资料，自动选择全文或分层阅读。审核、修改目标并勾选后才加入计划；章节进度表示资料已分析，不表示已经掌握。</p>
           <form id="outline-form" class="practice-start-form">
+            <label>提取算法 <select id="outline-algorithm"><option value="v1">V1 原算法（当前默认 / 对照）</option><option value="v2">V2 原文直接提取（实验）</option></select></label>
+            <label>V2 输入与输出总预算 <input id="outline-context-tokens" type="number" min="8192" max="1048576" step="1024" value="131072">（应用策略，需与实际服务容量匹配）</label>
             <label for="outline-objective">学习方向（可选）</label>
             <input id="outline-objective" maxlength="300" placeholder="例如：理解 TCP 的可靠传输">
             <button id="outline-create" class="primary-button" type="submit">生成可审核清单</button>

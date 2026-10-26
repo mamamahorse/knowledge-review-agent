@@ -174,8 +174,14 @@ def run_outline(store, identity, current_snapshots):
             if not store.start(identity):
                 return
             if job['plan']:
-                from outline_context import run_adaptive
-                run_adaptive(store, job, current_snapshots)
+                if job['plan'].get('version') == 2:
+                    from outline_v2 import run_direct
+                    run_direct(store, job, current_snapshots)
+                elif job['plan'].get('version') == 1:
+                    from outline_context import run_adaptive
+                    run_adaptive(store, job, current_snapshots)
+                else:
+                    raise ValueError('不支持的清单计划版本。')
                 return
             sources = archived_sources(job['snapshots'])
             by_id = {s.source_id: s for s in sources}
@@ -243,8 +249,8 @@ def public_outline(store, identity, current_snapshots):
     for section in job['sections']:
         batches = [b for b in job['batches'] if b['source_id'] == section['source_id'] and
                    b['line_start'] <= section['line_end'] and b['line_end'] >= section['line_start']]
-        completed = sum(min(b['line_end'], section['line_end']) - max(b['line_start'], section['line_start']) + 1
-                        for b in batches if b['status'] == 'completed')
+        from outline_v2 import covered_lines
+        completed = covered_lines(batches, section)
         total = section['line_end'] - section['line_start'] + 1
         status = 'completed' if completed == total else 'partial' if completed else 'failed' if any(b['status'] == 'failed' for b in batches) else 'pending'
         linked = [c for c in candidates if any(cite['source_id'] == section['source_id'] and
@@ -266,7 +272,10 @@ def public_outline(store, identity, current_snapshots):
             any(r['status'] in ('queued', 'running') for r in [*grouping['runs'], *grouping['reviews'], *routes['runs']]),
         'reading_plan': job['plan'], 'context_steps': [{k: s[k] for k in
             ('id', 'kind', 'scope_id', 'status', 'error', 'inputs', 'result', 'request')} for s in job['context_steps']],
-        'coverage': coverage, 'candidates': candidates, 'grouping': grouping, 'routes': routes}
+        'coverage': coverage, 'candidates': candidates, 'grouping': grouping, 'routes': routes,
+        'extraction_diagnostics': [{'batch_id': b['id'], 'status': b['status'], 'calls': b['calls'],
+            'primary_ranges': json.loads(b['window_json'])['primary_ranges'] if b['window_json'] else [[b['line_start'],b['line_end']]],
+            'request': json.loads(b['request_json']) if b['request_json'] else None} for b in job['batches']]}
 
 
 def candidate_context(store, identity):

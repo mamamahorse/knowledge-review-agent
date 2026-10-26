@@ -39,7 +39,7 @@ def structured_protocols(schema):
             {"tools": result_tools(schema), "tool_choice": {"type": "function", "function": {"name": RESULT_TOOL}}}]
 
 
-def request_structured(client, model: str, messages: list[dict], schema: type[Result], *, budget=None, before_request=None, on_delta=None) -> Result:
+def request_structured(client, model: str, messages: list[dict], schema: type[Result], *, budget=None, before_request=None, on_delta=None, telemetry=None) -> Result:
     budget = budget or GenerationBudget.from_env()
     if on_delta is not None:
         return request_streamed(client, model, messages, schema, budget, before_request, on_delta)
@@ -58,11 +58,13 @@ def request_structured(client, model: str, messages: list[dict], schema: type[Re
             if not response_format_is_unavailable(exc):
                 raise
         else:
+            if telemetry is not None:
+                telemetry(response, 'json_schema')
             message = checked_message(response)
             if message.parsed is None:
                 raise RuntimeError("the model returned no structured result.")
             return message.parsed
-    return request_tool_result(client, model, messages, schema, provider, budget, before_request)
+    return request_tool_result(client, model, messages, schema, provider, budget, before_request, telemetry)
 
 
 def request_streamed(client, model, messages, schema, budget, before_request, on_delta):
@@ -105,7 +107,7 @@ def request_streamed(client, model, messages, schema, budget, before_request, on
     return result
 
 
-def request_tool_result(client, model, messages, schema, provider, budget, before_request=None):
+def request_tool_result(client, model, messages, schema, provider, budget, before_request=None, telemetry=None):
     # This is a result submission, not an executable or state-writing tool.
     # Compatible providers may not enforce strict schemas; validate locally too.
     tools = result_tools(schema)
@@ -135,6 +137,8 @@ def request_tool_result(client, model, messages, schema, provider, budget, befor
             model=model, messages=messages, tools=tools, tool_choice="auto",
             max_tokens=budget.output_tokens,
         )
+    if telemetry is not None:
+        telemetry(response, 'tool_' + mode)
     message = checked_message(response)
     calls = message.tool_calls or []
     if len(calls) != 1 or calls[0].type != "function" or calls[0].function.name != RESULT_TOOL:

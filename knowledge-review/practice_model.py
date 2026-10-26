@@ -90,11 +90,17 @@ def parse_grade(value):
     return cls.model_validate(data)
 
 
-def _request_structured(messages: list[dict], schema: type[StrictModel], *, before_request=None):
+def _request_structured(messages: list[dict], schema: type[StrictModel], *, before_request=None, budget=None, telemetry=None):
     model, options = model_settings()
+    if telemetry is not None:
+        # Explicitly observed V2 calls must not hide SDK retries and their cost.
+        options = {**options, 'max_retries': 0}
     try:
         with OpenAI(**{**options, **model_http_options()}) as client:
-            return request_structured(client, model, messages, schema, before_request=before_request)
+            extra = ({'budget': budget} if budget is not None else {})
+            if telemetry is not None:
+                extra['telemetry'] = telemetry
+            return request_structured(client, model, messages, schema, before_request=before_request, **extra)
     except APIError as exc:
         raise RuntimeError(f"practice model request failed: {exc}") from exc
     except BudgetError:

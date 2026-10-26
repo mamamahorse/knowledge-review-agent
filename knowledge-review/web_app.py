@@ -260,6 +260,8 @@ class CollectionPracticeRequest(BaseModel):
 
 class OutlineRequest(CollectionPracticeRequest):
     request_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+    algorithm: Literal['v1', 'v2'] = 'v1'
+    context_tokens: int | None = Field(default=None, ge=8192, le=1048576)
 
 
 class OutlineEditRequest(BaseModel):
@@ -559,8 +561,15 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 raise ValueError('这个集合及子集合还没有 Markdown 资料，请先导入。')
             from practice_store import archived_sources
             load_dotenv(ROOT / '.env')
-            from outline_context import plan_outline
-            sections, batches, plan = plan_outline(archived_sources(snapshots), snapshots, payload.objective, payload.response_language)
+            if payload.algorithm == 'v2':
+                from outline_v2 import plan_direct
+                sections, batches, plan = plan_direct(archived_sources(snapshots), snapshots,
+                    payload.objective, payload.response_language, payload.context_tokens)
+            else:
+                if payload.context_tokens is not None:
+                    raise ValueError('V1继续使用原环境预算；context_tokens仅用于V2实验任务。')
+                from outline_context import plan_outline
+                sections, batches, plan = plan_outline(archived_sources(snapshots), snapshots, payload.objective, payload.response_language)
             job_id = outlines.create(identity, payload.request_id, payload.objective, payload.response_language,
                 scope_fingerprint(snapshots), snapshots, sections, batches, plan)
             if outlines.get(job_id)['status'] == 'queued':

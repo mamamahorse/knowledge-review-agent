@@ -1,5 +1,5 @@
 const outlineStates = { queued: "等待生成", running: "正在分析", paused: "已暂停", failed: "未全部完成，可继续", completed: "分析完成" };
-const chapterStates = { pending: "待分析", partial: "部分分析", failed: "分析失败", completed: "已分析" };
+const chapterStates = { pending: "待分析", partial: "部分分析", failed: "分析失败", completed: "已分析", superseded: "已由子批替代" };
 let outlineJob = null;
 let outlineEpoch = 0;
 let outlineTimer = null;
@@ -105,11 +105,18 @@ function renderOutline(job) {
     reading.append(makeElement("summary", "", "阅读方式与整体背景"));
     job.reading_plan.documents.forEach((doc) => {
       const name = job.coverage.find((s) => s.source_id === doc.source_id)?.name || "文档";
-      reading.append(makeElement("p", "practice-state", `${name} · ${doc.mode === "full" ? "全文阅读" : "分层阅读"} · ${doc.reason}`));
+      const mode = {full:'全文阅读', hierarchical:'分层阅读', direct:'原文直接提取（V2）'}[doc.mode] || doc.mode;
+      reading.append(makeElement("p", "practice-state", `${name} · ${mode} · ${doc.reason}`));
+      if (doc.parse_issues?.length) reading.append(makeElement('p', 'error', `解析仍有 ${doc.parse_issues.length} 项待核对，处理覆盖不代表原文件完整。`));
     });
     const labels = { excerpt: "片段概述", chapter: "章节归并", document: "文档概览" };
     const steps = job.context_steps || [];
-    reading.append(makeElement("p", "practice-hint", `整体背景整理 ${steps.filter((s) => s.status === "completed").length}/${steps.length} 步完成。概述帮助理解，知识依据仍来自原文；章节分析进度不代表掌握程度。`));
+    if (job.reading_plan.version === 2) {
+      reading.append(makeElement('p', 'practice-hint', `逐任务预算 ${job.reading_plan.generation_budget.context_tokens}（保守计数）；直接提取，不生成概述树。处理完成不保证目标无遗漏。`));
+      for (const batch of job.extraction_diagnostics || []) {
+        if (batch.request?.coverage_risk) reading.append(makeElement('p', 'error', `覆盖待核查：${batch.request.coverage_risk}`));
+      }
+    } else reading.append(makeElement("p", "practice-hint", `整体背景整理 ${steps.filter((s) => s.status === "completed").length}/${steps.length} 步完成。概述帮助理解，知识依据仍来自原文；章节分析进度不代表掌握程度。`));
     steps.forEach((step) => {
       const item = makeElement("details", "learning-details");
       item.append(makeElement("summary", "", `${labels[step.kind] || "背景整理"} · ${step.status === "superseded" ? "旧步骤已替代" : chapterStates[step.status] || "正在整理"}${step.error ? ` · ${step.error}` : ""}`));
@@ -437,11 +444,13 @@ $("outline-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   $("outline-create").disabled = true;
   setStatus("outline-status", "正在准备章节并启动分析……");
-  const key = JSON.stringify([$("learning-collection").value, $("outline-objective").value, responseLanguage()]);
+  const algorithm = $('outline-algorithm').value;
+  const policy = algorithm === 'v2' ? {algorithm, context_tokens: Number($('outline-context-tokens').value)} : {algorithm};
+  const key = JSON.stringify([$("learning-collection").value, $("outline-objective").value, responseLanguage(), policy]);
   if (outlineRequestId?.key !== key) outlineRequestId = { key, id: crypto.randomUUID() };
   try {
     const result = await jsonRequest(`/api/collections/${$("learning-collection").value}/outlines`, {
-      request_id: outlineRequestId.id, objective: $("outline-objective").value, response_language: responseLanguage() });
+      request_id: outlineRequestId.id, objective: $("outline-objective").value, response_language: responseLanguage(), ...policy });
     outlineRequestId = null;
     await refreshOutlines(result.id);
     setStatus("outline-status", "分析已启动，可查看章节进度，也可暂停后继续。");

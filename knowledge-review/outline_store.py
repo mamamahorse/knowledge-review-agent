@@ -13,6 +13,12 @@ def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+def direct_diagnostic(previous, diagnostic):
+    old = json.loads(previous or '{}')
+    attempts = old.get('attempts', [old] if old else [])
+    return {**diagnostic, 'attempts': [*attempts, dict(diagnostic)]}
+
+
 def initialize_outlines(conn):
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS learning_outlines (
@@ -43,9 +49,11 @@ def initialize_outlines(conn):
     """)
     if 'plan_json' not in {r[1] for r in conn.execute('PRAGMA table_info(learning_outlines)')}:
         conn.execute("ALTER TABLE learning_outlines ADD COLUMN plan_json TEXT")
-    for name in ('visible_json', 'request_json'):
+    for name in ('visible_json', 'request_json', 'window_json', 'parent_batch_id'):
         if name not in {r[1] for r in conn.execute('PRAGMA table_info(outline_batches)')}:
             conn.execute(f'ALTER TABLE outline_batches ADD COLUMN {name} TEXT')
+    if 'calls' not in {r[1] for r in conn.execute('PRAGMA table_info(outline_batches)')}:
+        conn.execute('ALTER TABLE outline_batches ADD COLUMN calls INTEGER NOT NULL DEFAULT 0')
 
 
 class OutlineBusy(ValueError):
@@ -97,6 +105,11 @@ class OutlineStore:
             if old:
                 if (old['scope_fingerprint'], old['objective'], old['response_language']) != (scope, objective, language):
                     raise OutlineBusy("同一提交标识的资料或目标已变化，请新建一份清单。")
+                previous = json.loads(old['plan_json'] or 'null')
+                old_policy = (previous or {}).get('generation_budget')
+                new_policy = (plan or {}).get('generation_budget')
+                if (previous or {}).get('version') != (plan or {}).get('version') or old_policy != new_policy:
+                    raise OutlineBusy('同一提交标识的算法或预算已变化，请新建清单。')
                 return old['id']
             if db.execute("SELECT id FROM learning_outlines WHERE collection_id=? AND status IN ('queued','running')",
                           (collection_id,)).fetchone():
@@ -111,9 +124,10 @@ class OutlineStore:
                 db.execute('UPDATE learning_outlines SET plan_json=? WHERE id=?', (json.dumps(plan, ensure_ascii=False), identity))
             for index, batch in enumerate(batches):
                 db.execute("""INSERT INTO outline_batches
-                    (id,outline_id,position,section_id,source_id,line_start,line_end,status,error,note)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)""", (uuid4().hex, identity, index, batch['section_id'], batch['source_id'],
-                    batch['line_start'], batch['line_end'], batch.get('status', 'pending'), batch.get('error'), batch.get('note', '')))
+                    (id,outline_id,position,section_id,source_id,line_start,line_end,status,error,note,window_json)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (uuid4().hex, identity, index, batch['section_id'], batch['source_id'],
+                    batch['line_start'], batch['line_end'], batch.get('status', 'pending'), batch.get('error'), batch.get('note', ''),
+                    json.dumps(batch['window'], ensure_ascii=False) if batch.get('window') else None))
         return identity
 
     def get(self, identity):
@@ -193,9 +207,11 @@ class OutlineStore:
 
     def finish_batch(self, batch, proposals, note, visible=None, diagnostic=None):
         with self.practice.transaction() as db:
-            row = db.execute("SELECT status,attempt FROM outline_batches WHERE id=?", (batch['id'],)).fetchone()
+            row = db.execute("SELECT status,attempt,window_json,request_json FROM outline_batches WHERE id=?", (batch['id'],)).fetchone()
             if row['status'] != 'running' or row['attempt'] != batch['attempt']:
                 return False
+            if row['window_json'] and diagnostic is not None:
+                diagnostic = direct_diagnostic(row['request_json'], diagnostic)
             for position, proposal in enumerate(proposals):
                 db.execute("INSERT INTO outline_candidates(id,outline_id,batch_id,position,proposal_json) VALUES (?,?,?,?,?)",
                            (uuid4().hex, batch['outline_id'], batch['id'], position, proposal.model_dump_json()))
@@ -212,7 +228,7 @@ class OutlineStore:
 
     def settle(self, identity):
         with self.practice.transaction() as db:
-            remaining = db.execute("SELECT count(*) FROM outline_batches WHERE outline_id=? AND status != 'completed'", (identity,)).fetchone()[0]
+            remaining = db.execute("SELECT count(*) FROM outline_batches WHERE outline_id=? AND status NOT IN ('completed','superseded')", (identity,)).fetchone()[0]
             remaining += db.execute("SELECT count(*) FROM outline_context_steps WHERE outline_id=? AND status NOT IN ('completed','superseded')", (identity,)).fetchone()[0]
             db.execute("UPDATE learning_outlines SET status=?,updated_at=? WHERE id=? AND status='running'",
                        ('failed' if remaining else 'completed', timestamp(), identity))
@@ -280,6 +296,45 @@ class OutlineStore:
                     row['section_id'], row['source_id'], end + 1, row['line_end']))
             db.execute('UPDATE outline_batches SET line_end=? WHERE id=?', (end, row['id']))
         return {**batch, 'line_end': end}
+
+    def reserve_direct_call(self, batch, maximum):
+        with self.practice.transaction() as db:
+            row = db.execute('SELECT b.status,b.attempt,o.status AS job_status FROM outline_batches b '
+                'JOIN learning_outlines o ON o.id=b.outline_id WHERE b.id=?', (batch['id'],)).fetchone()
+            if not row or row['status'] != 'running' or row['attempt'] != batch['attempt'] or row['job_status'] != 'running':
+                raise OutlineBusy('任务已暂停或执行版本变化。')
+            used = db.execute('SELECT COALESCE(SUM(calls),0) FROM outline_batches WHERE outline_id=?',
+                              (batch['outline_id'],)).fetchone()[0]
+            if used >= maximum:
+                raise OutlineBusy('已达到本任务保存的模型调用额度；已有结果保留。')
+            db.execute('UPDATE outline_batches SET calls=calls+1 WHERE id=?', (batch['id'],))
+
+    def fail_direct_batch(self, batch, error, diagnostic):
+        with self.practice.transaction() as db:
+            row = db.execute('SELECT request_json FROM outline_batches WHERE id=?', (batch['id'],)).fetchone()
+            diagnostic = direct_diagnostic(row['request_json'], diagnostic)
+            db.execute("UPDATE outline_batches SET status='failed',attempt=NULL,error=?,request_json=? "
+                       "WHERE id=? AND status='running' AND attempt=?",
+                       (error, json.dumps(diagnostic, ensure_ascii=False), batch['id'], batch['attempt']))
+
+    def split_direct_batch(self, batch, children, diagnostic):
+        with self.practice.transaction() as db:
+            row = db.execute('SELECT b.*,o.status AS job_status FROM outline_batches b JOIN learning_outlines o '
+                             'ON o.id=b.outline_id WHERE b.id=?', (batch['id'],)).fetchone()
+            if not row or row['status'] != 'running' or row['attempt'] != batch['attempt'] or row['job_status'] != 'running':
+                raise OutlineBusy('不能拆分旧执行或已暂停的批次。')
+            diagnostic = direct_diagnostic(row['request_json'], diagnostic)
+            for later in db.execute('SELECT id,position FROM outline_batches WHERE outline_id=? AND position>? ORDER BY position DESC',
+                                    (row['outline_id'], row['position'])).fetchall():
+                db.execute('UPDATE outline_batches SET position=? WHERE id=?', (later['position']+len(children), later['id']))
+            for index, window in enumerate(children, 1):
+                units = window['units']
+                db.execute("INSERT INTO outline_batches (id,outline_id,position,section_id,source_id,line_start,line_end,"
+                           "status,parent_batch_id,window_json) VALUES (?,?,?,?,?,?,?,'pending',?,?)",
+                           (uuid4().hex,row['outline_id'],row['position']+index,units[0]['section_id'],row['source_id'],
+                            units[0]['start'],units[-1]['end'],row['id'],json.dumps(window, ensure_ascii=False)))
+            db.execute("UPDATE outline_batches SET status='superseded',attempt=NULL,note=?,request_json=? WHERE id=?",
+                       ('原批次由完整子批替代，原输出不发布为候选。',json.dumps(diagnostic, ensure_ascii=False),row['id']))
 
     def edit(self, identity, learning: LearningDraft, revision):
         with self.practice.transaction() as db:
