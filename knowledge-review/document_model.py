@@ -111,6 +111,19 @@ class Document:
 
 def markdown_document(text: str) -> Document:
     """Keep the original text and line numbers, including blank lines and CRLF."""
+    from html.parser import HTMLParser
+
+    class ImageReferences(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.uris = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag.lower() == 'img':
+                uri = dict(attrs).get('src')
+                if uri:
+                    self.uris.append(uri)
+
     tokens = MarkdownIt('commonmark').enable('table').parse(text)
     blocks, assets, hierarchy = [], [], []
     for i, token in enumerate(tokens):
@@ -124,15 +137,29 @@ def markdown_document(text: str) -> Document:
             while hierarchy and hierarchy[-1][0] >= level:
                 hierarchy.pop()
             hierarchy.append((level, tokens[i + 1].content))
-        refs = []
-        if i + 1 < len(tokens):
-            for child in tokens[i + 1].children or []:
-                if child.type == 'image':
-                    uri = child.attrGet('src')
-                    identity = digest('linked-image:' + str(uri))
-                    if identity not in {a.asset_id for a in assets}:
-                        assets.append(Asset(identity, 'linked_image', uri=uri))
-                    refs.append(identity)
+        refs, uris = [], []
+        nested = [token]
+        index = i + 1
+        while index < len(tokens):
+            candidate = tokens[index]
+            if candidate.level == 0 and candidate.map is not None and candidate.nesting != -1:
+                break
+            nested.append(candidate)
+            index += 1
+        for item in nested:
+            for child in [item, *(item.children or [])]:
+                if child.type == 'image' and child.attrGet('src'):
+                    uris.append(child.attrGet('src'))
+                elif child.type in ('html_inline', 'html_block'):
+                    parser = ImageReferences()
+                    parser.feed(child.content)
+                    uris.extend(parser.uris)
+        for uri in uris:
+            identity = digest('linked-image:' + uri)
+            if identity not in {a.asset_id for a in assets}:
+                assets.append(Asset(identity, 'linked_image', uri=uri))
+            if identity not in refs:
+                refs.append(identity)
         blocks.append(ContentBlock(digest(f'markdown:{start}:{end}:{kind}'), kind, start, end,
             (Location(line_start=start, line_end=end),), tuple(refs), tuple(h[1] for h in hierarchy),
             header_end=min(start + 1, end) if kind == 'table' else None))
@@ -177,8 +204,8 @@ def citation_metadata(source, citation):
         return {}
     result = {'format': 'pdf', 'locations': source.document.locations(citation.line_start, citation.line_end)}
     if citation.asset_id is not None:
-        asset = next((a for a in source.document.assets if a.asset_id == citation.asset_id), None)
-        if asset is not None:
-            result.update(asset_id=asset.asset_id, locations=[asdict(Location(asset.page, asset.bbox))],
-                          evidence_method='vlm_visual_interpretation')
+        from pdf_regions import resolve_asset
+        asset = resolve_asset(source, citation.asset_id)
+        result.update(asset_id=asset.asset_id, locations=[asdict(Location(asset.page, asset.bbox))],
+                      evidence_method='vlm_visual_interpretation')
     return result

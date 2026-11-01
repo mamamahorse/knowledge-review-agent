@@ -23,6 +23,9 @@ def work_scope(runner, lease):
 
 
 def job_status(kind, store, identity):
+    if kind == 'final_review':
+        from outline_final_store import record
+        return record(store,identity)['status']
     if kind == 'outline':
         return store.get(identity)['status']
     if kind == 'grouping':
@@ -39,7 +42,10 @@ def job_status(kind, store, identity):
 
 def interrupt_job(kind, store, identity):
     # Reuse original attempts/status transitions, preserving completed results.
-    if kind == 'outline':
+    if kind == 'final_review':
+        from outline_final_store import pause
+        pause(store,identity)
+    elif kind == 'outline':
         with store.lock(identity):
             store.recover(identity)
     elif kind == 'grouping':

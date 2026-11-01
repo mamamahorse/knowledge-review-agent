@@ -10,12 +10,13 @@ from answers import Citation
 from generation_budget import GenerationBudget
 from learning_store import LearningStore
 from library_store import LibraryStore
-from outline_context import DocumentBrief, BriefPoint, FullOutlineDraft, plan_outline, dependency
+from outline_context import (DocumentBrief, BriefPoint, MergeDocumentBrief, FullOutlineDraft,
+    plan_outline, dependency, available_evidence, evidence_id, merge_messages, resolve_merge, execute_step)
 from outline_service import (OutlineDraft, run_outline, scope_fingerprint, public_outline, excerpt,
                              edit_candidate, enroll_candidate)
 from outline_store import OutlineStore
 from sources import Source
-from test_outlines import proposal, fake_model
+from test_outlines import proposal, fake_model, wire_proposal
 from test_support import temporary_notes
 
 
@@ -26,6 +27,9 @@ LONG = '# 定义\n\nACK 表示下一个期望字节；SEQ=100、LEN=20 时 ACK=1
 
 def controlled(messages, schema):
     data = json.loads(messages[1]['content'])
+    if schema is MergeDocumentBrief:
+        points = [p for overview in data['overviews'] for p in overview['points']]
+        return schema(points=points[:1], unresolved=[])
     if schema is DocumentBrief:
         if 'sources' in data:
             sid = re.search(r'Source ID: ([^\n]+)', data['sources'])[1]
@@ -42,6 +46,8 @@ def controlled(messages, schema):
 
 class OutlineContextTests(unittest.TestCase):
     def setUp(self):
+        self.auto_finalize=patch('outline_service.run_final_review_after_extraction')
+        self.auto_finalize.start(); self.addCleanup(self.auto_finalize.stop)
         self.temp = temporary_notes()
         self.root = self.temp.__enter__()
         self.practice = LearningStore(self.root / 'practice.sqlite3')
@@ -174,7 +180,7 @@ class OutlineContextTests(unittest.TestCase):
             if schema is OutlineDraft:
                 data = json.loads(messages[1]['content'])
                 self.assertIn('[L1] # 定义', data['sources'])
-                return OutlineDraft(proposals=[proposal('version', 1)], note='结合前章原文。')
+                return OutlineDraft(proposals=[wire_proposal(proposal('version',1),data['available_evidence'])], note='结合前章原文。')
             return controlled(messages, schema)
         with patch('outline_service._request_structured', side_effect=early_citation):
             run_outline(self.store, identity, self.current)
@@ -215,9 +221,9 @@ class OutlineContextTests(unittest.TestCase):
         count_before = len(self.store.get(identity)['batches'])
         def verbose(messages, schema):
             result = controlled(messages, schema)
-            if schema is DocumentBrief:
+            if schema in (DocumentBrief, MergeDocumentBrief):
                 point = result.points[0]
-                return DocumentBrief(points=[point.model_copy(update={'text': f'定义{n} ' + 'x' * 220}) for n in range(6)], unresolved=[])
+                return schema(points=[point.model_copy(update={'text': f'定义{n} ' + 'x' * 220}) for n in range(6)], unresolved=[])
             return result
         with patch('outline_context.GenerationBudget.from_env', return_value=budget), patch('outline_service._request_structured', side_effect=verbose):
             run_outline(self.store, identity, self.current)
@@ -295,6 +301,102 @@ class OutlineContextTests(unittest.TestCase):
         self.assertEqual(requested['status'], 'pending')
         retry = self.store.claim_context(requested['id'])
         self.assertTrue(self.store.finish_context(retry, DocumentBrief(points=[], unresolved=[]), {}))
+
+    def merge_fixture(self):
+        identity = self.create('\n'.join(f'Original line {n}' for n in range(1, 31)))
+        self.store.start(identity)
+        cites = [Citation(source_id='version', line_start=3, line_end=9),
+                 Citation(source_id='version', line_start=11, line_end=25)]
+        inputs = [{'result': DocumentBrief(points=[BriefPoint(text='条件及例外', citations=cites)],
+                                           unresolved=[]).model_dump()}]
+        messages = merge_messages(inputs, 'document', '', 'zh')
+        visible = [excerpt(self.source, c.line_start, c.line_end) for c in cites]
+        return identity, messages, visible, cites
+
+    def test_merge_ids_preserve_disjoint_ranges_and_persist_resolved_citations(self):
+        identity, messages, visible, cites = self.merge_fixture()
+        refs = [evidence_id(c) for c in cites]
+        draft = MergeDocumentBrief(points=[dict(text='合并解释条件及例外', evidence_ids=refs)], unresolved=[])
+        with patch('outline_service._request_structured', return_value=draft) as model:
+            step = execute_step(self.store, self.store.get(identity), 'document', 'doc', [],
+                                messages, visible, self.current)
+        self.assertIs(model.call_args.args[1], MergeDocumentBrief)
+        self.assertEqual(DocumentBrief.model_validate(step['result']).points[0].citations, cites)
+        self.assertEqual(step['request']['evidence_protocol'], 'stable-ids-v1')
+        self.assertEqual(step['request']['selected_evidence_ids'], [refs])
+        self.assertNotIn('evidence_ids', step['result']['points'][0])
+        # The gap remains forbidden; IDs do not widen 3-9 + 11-25 to 3-25.
+        from context import citation_is_visible
+        self.assertFalse(citation_is_visible('version', 3, 25, visible))
+        # Reopening/reusing a completed step does not generate it again.
+        reopened = OutlineStore(LearningStore(self.practice.path))
+        with patch('outline_service._request_structured') as model:
+            cached = execute_step(reopened, reopened.get(identity), 'document', 'doc', [],
+                                  messages, visible, self.current)
+        model.assert_not_called()
+        self.assertEqual(cached['result_json'], step['result_json'])
+
+    def test_merge_unknown_or_stale_id_fails_without_publishing_result(self):
+        identity, messages, visible, cites = self.merge_fixture()
+        stale = evidence_id(cites[0].model_copy(update={'source_id': 'old-version'}))
+        for ref in ['ref1', stale]:
+            with self.subTest(ref=ref):
+                draft = MergeDocumentBrief(points=[dict(text='不合法依据', evidence_ids=[ref])], unresolved=[])
+                with patch('outline_service._request_structured', return_value=draft):
+                    with self.assertRaisesRegex(ValueError, '未提供的证据ID'):
+                        execute_step(self.store, self.store.get(identity), 'document', ref, [],
+                                     messages, visible, self.current)
+        self.assertTrue(all(s['status'] == 'failed' and s['result'] is None
+                            for s in self.store.get(identity)['context_steps']))
+
+    def test_merge_ids_still_require_visible_ranges(self):
+        identity, messages, visible, cites = self.merge_fixture()
+        draft = MergeDocumentBrief(points=[dict(text='引用缺失范围', evidence_ids=[evidence_id(cites[1])])], unresolved=[])
+        with patch('outline_service._request_structured', return_value=draft):
+            with self.assertRaisesRegex(ValueError, '超出了输入证据'):
+                execute_step(self.store, self.store.get(identity), 'document', 'doc', [],
+                             messages, visible[:1], self.current)
+        self.assertIsNone(self.store.get(identity)['context_steps'][0]['result'])
+
+
+class EvidenceIdTests(unittest.TestCase):
+    def test_ids_are_stable_under_order_deduplication_and_reduction(self):
+        a = dict(source_id='v1', line_start=3, line_end=9)
+        b = dict(source_id='v1', line_start=11, line_end=25)
+        self.assertEqual(available_evidence([a, b, a]), available_evidence([b, a]))
+        self.assertEqual(evidence_id(a), evidence_id({**a, 'asset_id': None}))
+        registry = available_evidence([a, b])
+        result = resolve_merge(MergeDocumentBrief(points=[dict(text='两项条件',
+            evidence_ids=[evidence_id(a), evidence_id(b)])], unresolved=[]), registry)
+        next_request = json.loads(merge_messages([{'result': result.model_dump()}], 'doc', '', 'zh')[1]['content'])
+        self.assertEqual(next_request['available_evidence'], registry)
+        self.assertEqual(set(next_request['overviews'][0]['points'][0]), {'text', 'evidence_ids'})
+
+    def test_identity_includes_source_version_exact_range_and_asset(self):
+        original = dict(source_id='v1', line_start=3, line_end=9)
+        variants = [original, {**original, 'source_id': 'v2'}, {**original, 'line_start': 4},
+                    {**original, 'line_end': 10}, {**original, 'asset_id': 'asset'}]
+        self.assertEqual(len({evidence_id(c) for c in variants}), len(variants))
+
+    def test_schema_forbids_free_coordinates_and_bounds_references(self):
+        from pydantic import ValidationError
+        for point in [dict(text='x', citations=[dict(source_id='v', line_start=3, line_end=25)]),
+                      dict(text='x', evidence_ids=[]), dict(text='x', evidence_ids=['a', 'b', 'c']),
+                      dict(text='x', evidence_ids=[1])]:
+            with self.subTest(point=point), self.assertRaises(ValidationError):
+                MergeDocumentBrief(points=[point], unresolved=[])
+
+    def test_repeated_ids_deduplicate_without_changing_coordinates(self):
+        cite = dict(source_id='v', line_start=3, line_end=9)
+        ref = evidence_id(cite)
+        result = resolve_merge(MergeDocumentBrief(points=[dict(text='x', evidence_ids=[ref, ref])], unresolved=[]),
+                               available_evidence([cite]))
+        self.assertEqual(result.points[0].citations, [Citation.model_validate(cite)])
+
+    def test_invalid_ranges_are_not_registered(self):
+        for start, end in [(0, 9), (9, 3)]:
+            with self.subTest(start=start, end=end), self.assertRaises(ValueError):
+                available_evidence([dict(source_id='v', line_start=start, line_end=end)])
 
 
 if __name__ == '__main__':

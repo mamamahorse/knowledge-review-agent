@@ -5,6 +5,7 @@ let outlineEpoch = 0;
 let outlineTimer = null;
 let outlineJoining = false;
 let outlineRequestId = null;
+let outlineShowAll = false;
 let outlineDrafts = new Map();
 let outlineGroupDrafts = new Map();
 let outlineGroupRequest = null;
@@ -39,7 +40,7 @@ async function refreshOutlines(preferred = null) {
 async function loadOutline(id, epoch = outlineEpoch) {
   const job = await request(`/api/outlines/${id}`);
   if (epoch !== outlineEpoch || job.collection_id !== $("learning-collection").value) return;
-  if (outlineJob?.id !== id) { outlineDrafts = new Map(); outlineGroupDrafts = new Map(); }
+  if (outlineJob?.id !== id) { outlineDrafts = new Map(); outlineGroupDrafts = new Map(); outlineShowAll = false; }
   outlineJob = job;
   try { localStorage.setItem(`knowledge-review.outline.${job.collection_id}`, id); } catch { }
   if (!outlineJoining) renderOutline(job);
@@ -100,6 +101,35 @@ function renderOutline(job) {
   const listOption = [...$("outline-list").options].find((option) => option.value === job.id);
   if (listOption) listOption.textContent = `${localDate(job.created_at)} · ${outlineStates[job.status]}${job.objective ? ` · ${job.objective}` : ""}`;
   panel.append(makeElement("p", "practice-state", `${outlineStates[job.status]} · ${job.coverage.filter((s) => s.status === "completed").length}/${job.coverage.length} 个章节已分析 · ${job.candidates.length} 个候选目标`));
+  const final = job.final_review;
+  if (final) {
+    const section = makeElement('section', 'learning-details');
+    section.append(makeElement('h3', '', '自动整体复查 · 去重与补漏'));
+    const states = {queued:'等待整体复查', running:'正在对照原文并整理清单', completed:'整体复查完成', failed:'整体复查未完成，原清单保留', paused:'整体复查已暂停'};
+    section.append(makeElement('p', 'practice-state', `${states[final.status]} · 已核查 ${final.windows_completed}/${final.windows_total} 个原文窗口 · 请求 ${final.calls_used}/${final.allowance}`));
+    if (final.error) section.append(makeElement('p', 'error', final.error));
+    if (final.stale) section.append(makeElement('p', 'error', '资料或目标已修改，这份整合结果仅供查看；当前显示全部候选。'));
+    if (final.result) {
+      section.append(makeElement('p', 'practice-hint', `补充 ${final.result.added_ids.length} 个目标，整合后保留 ${final.result.retained_ids.length} 个。原始目标未删除；模型复查不保证没有遗漏，也不代表已经掌握。`));
+      if (final.result.coverage_uncertain || final.result.unprocessed.length || final.result.parse_issues.length) section.append(makeElement('p', 'error', '仍有覆盖疑问、未核查原文或解析问题，请结合原文审核。'));
+      const detail = makeElement('details'); detail.append(makeElement('summary', '', '查看去重理由与复查说明'));
+      detail.append(makeElement('p', '', final.result.note));
+      final.result.duplicates.forEach(group => detail.append(makeElement('p', '', `${group.duplicate_ids.length} 个重复项归入代表目标：${group.reason}`)));
+      if (!final.result.original_text_in_final_request) detail.append(makeElement('p', 'practice-hint', '最后整合使用了完整目标描述和条件；原文在前面的补漏窗口中核查，最后一轮未重复发送全部引文。'));
+      section.append(detail);
+      const toggle = makeElement('button','practice-action secondary',outlineShowAll ? '查看整合后的清单' : '查看全部候选（含去重项）'); toggle.type='button';
+      toggle.addEventListener('click',()=>{outlineShowAll=!outlineShowAll;renderOutline(job);}); section.append(toggle);
+    }
+    if (['failed','paused'].includes(final.status)) {
+      const retry=makeElement('button','practice-action secondary','增加24次额度并继续整体复查'); retry.type='button'; retry.disabled=job.stale || final.stale || job.processing;
+      retry.addEventListener('click',async()=>{try{await jsonRequest(`/api/outline-final-reviews/${final.id}/resume`,{call_limit:24});await loadOutline(job.id);}catch(error){outlineError(error);}});section.append(retry);
+    }
+    if (['running','queued'].includes(final.status)) {
+      const stop=makeElement('button','practice-action secondary','暂停整体复查');stop.type='button';
+      stop.addEventListener('click',async()=>{try{await jsonRequest(`/api/outline-final-reviews/${final.id}/pause`,{});await loadOutline(job.id);}catch(error){outlineError(error);}});section.append(stop);
+    }
+    panel.append(section);
+  }
   if (job.reading_plan) {
     const reading = makeElement("details", "learning-details");
     reading.append(makeElement("summary", "", "阅读方式与整体背景"));
@@ -112,9 +142,11 @@ function renderOutline(job) {
     const labels = { excerpt: "片段概述", chapter: "章节归并", document: "文档概览" };
     const steps = job.context_steps || [];
     if (job.reading_plan.version === 2) {
-      reading.append(makeElement('p', 'practice-hint', `逐任务预算 ${job.reading_plan.generation_budget.context_tokens}（保守计数）；直接提取，不生成概述树。处理完成不保证目标无遗漏。`));
+      reading.append(makeElement('p', 'practice-hint', `逐任务总预算 ${job.reading_plan.generation_budget.context_tokens}，输出预留 ${job.reading_plan.generation_budget.output_tokens}（保守计数）；直接提取，不生成概述树。处理完成不保证目标无遗漏。`));
       for (const batch of job.extraction_diagnostics || []) {
         if (batch.request?.coverage_risk) reading.append(makeElement('p', 'error', `覆盖待核查：${batch.request.coverage_risk}`));
+        else if (batch.request?.omission_risk) reading.append(makeElement('p', 'error', '当前原文内可能还有学习目标遗漏，已记录分块处理情况。'));
+        if (batch.request?.missing_context) reading.append(makeElement('p', 'practice-state', `资料外上下文缺失：${batch.request.missing_context}`));
       }
     } else reading.append(makeElement("p", "practice-hint", `整体背景整理 ${steps.filter((s) => s.status === "completed").length}/${steps.length} 步完成。概述帮助理解，知识依据仍来自原文；章节分析进度不代表掌握程度。`));
     steps.forEach((step) => {
@@ -175,7 +207,9 @@ function renderOutline(job) {
   selection.append(makeElement("span", "", "加入到"), destination, selectAll, enroll);
   panel.append(selection);
   panel.append(makeElement("p", "practice-hint", "加入时会按审核后的目标生成首道练习。未勾选目标只保存在清单中，不产生复习或掌握记录。"));
-  job.candidates.forEach((candidate, index) => {
+  const displayedCandidates = final?.status === 'completed' && !final.stale && !outlineShowAll
+    ? final.result.retained_ids.map(id => job.candidates.find(c => c.id === id)).filter(Boolean) : job.candidates;
+  displayedCandidates.forEach((candidate, index) => {
     const card = makeElement("article", "learning-item outline-candidate");
     const form = makeElement("form", "outline-edit");
     form.dataset.outlineCandidate = candidate.id;
@@ -189,6 +223,8 @@ function renderOutline(job) {
     selected.disabled = candidate.status !== "proposed" || candidate.suppressed || job.stale || outlineJoining;
     selectedLabel.append(selected, makeElement("span", "", `${index + 1}. ${learning.knowledge.name} · ${candidate.status === "enrolled" ? "已加入计划" : candidate.status === "enrolling" ? "正在加入" : candidate.suppressed ? "重复记录，加入代表目标即可" : "待审核"}`));
     form.append(selectedLabel);
+    if (candidate.origin_final_review_id) form.append(makeElement('p','practice-hint','整体复查补充的目标；仍需审核后主动加入计划。'));
+    if (candidate.final_review_duplicate) form.append(makeElement('p','practice-hint','自动整合建议视为重复；原始记录保留，可对照条件和原文自行审核。'));
     const editor = makeElement("details", "learning-details");
     editor.open = Boolean(saved?.open);
     editor.append(makeElement("summary", "", `审核与修改 · ${capabilities[learning.target.capability]} · ${learning.target.title}`));
@@ -203,7 +239,10 @@ function renderOutline(job) {
     editor.append(capabilityLabel);
     outlineField(editor, "description", "需要能做到什么", learning.target.description, true);
     outlineField(editor, "scope", "考察范围", learning.target.scope, true);
-    outlineField(editor, "criteria", "判断标准（每行一条，最多四条）", learning.target.criteria.join("\n"), true, 8000);
+    outlineField(editor, "criteria", "判断标准（每行一条，建议四条以内；必要条件不得删减）", learning.target.criteria.join("\n"), true, 8000);
+    if (learning.target.criteria.length > 4) {
+      editor.append(makeElement("p", "practice-hint", `当前目标包含${learning.target.criteria.length}条考核标准。请判断能否合并等价标准，或拆成独立学习目标；不得删除必要条件。若共同考察同一种能力，可以保留全部标准。`));
+    }
     const units = choice({ "": "创建新知识点", ...Object.fromEntries(learningGroups.map((g) => [g.id, g.name])) }, saved?.unit || "", "知识点归组");
     units.name = "unit";
     const unitLabel = makeElement("label", "outline-field", "加入计划时归入");

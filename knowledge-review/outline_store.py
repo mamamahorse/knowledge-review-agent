@@ -69,6 +69,8 @@ class OutlineStore:
             initialize_groups(db)
             from outline_route_store import initialize_routes
             initialize_routes(db)
+            from outline_final_store import initialize
+            initialize(db)
 
     @contextmanager
     def lock(self, identity):

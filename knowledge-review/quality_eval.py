@@ -23,7 +23,7 @@ from evaluation_report import grade_check, relation_checks, review_run, write_re
 from generation_budget import GenerationBudget
 from learning_store import LearningStore
 from learning_types import LearningDraft
-from outline_context import DocumentBrief, plan_outline, request_diagnostic
+from outline_context import DocumentBrief, MergeDocumentBrief, plan_outline, request_diagnostic
 from outline_group_store import get_run, rows
 from outline_grouping import GroupDraft, GroupProposal, run_grouping, start_grouping
 from outline_service import (check_request, excerpt, public_outline, run_outline,
@@ -56,6 +56,11 @@ def controlled_response(case, aliases, fixture_ids, example, messages, schema):
             overall_assessment=assessment, suggested_rating='Good' if assessment == 'meets_standard' else 'Again',
             rating_reason='受控返回，只验证数据链路。', target_fit=example.expected_target_fits[0], dimension_observations=[])
     data = json.loads(messages[1]['content'])
+    from outline_final_review import CoverageDraft, ConsolidationDraft
+    if schema is CoverageDraft:
+        return CoverageDraft(proposals=[],note='受控补漏返回；不代表无遗漏。')
+    if schema is ConsolidationDraft:
+        return ConsolidationDraft(retained_ids=[c['id'] for c in data['candidates']],duplicates=[],note='受控整合保留全部目标；不代表去重质量。')
     if issubclass(schema, GroupDraft):
         suggestions = []
         present = {c['id'] for c in data['candidates']}
@@ -70,7 +75,7 @@ def controlled_response(case, aliases, fixture_ids, example, messages, schema):
                 name='受控关系', reason=relation.reason, canonical_id=ids[0] if kind == 'duplicate_targets' else None))
         receipt = {'checked_indices': [p['index'] for p in data['comparisons']], 'deferred_indices': []} if 'comparisons' in data else {}
         return schema(suggestions=suggestions[:4], note='受控返回，不代表归组质量。', **receipt)
-    if schema is DocumentBrief and 'overviews' in data:
+    if schema is MergeDocumentBrief:
         points = [p for overview in data['overviews'] for p in overview['points']]
         return schema(points=points[:6], unresolved=[])
     # Use only the source ranges actually supplied to this request.
@@ -86,7 +91,13 @@ def controlled_response(case, aliases, fixture_ids, example, messages, schema):
     proposals = [LearningDraft.model_validate(remap_citations(d.model_dump(), aliases)) for d in case.candidate_fixtures.values()]
     visible = [d for d in proposals if all(citation_is_visible(c.source_id, c.line_start, c.line_end, chunks) for c in d.knowledge.citations)]
     limit = 6 if schema.__name__ == 'FullOutlineDraft' else 4
-    return schema(proposals=[d.model_dump() for d in visible[:limit]], note='受控提取，不代表知识完整性。')
+    selected=[]
+    for draft in visible[:limit]:
+        value=draft.model_dump(); citations=value['knowledge'].pop('citations')
+        value['knowledge']['evidence_ids']=[ref for ref,c in data['available_evidence'].items() if any(
+            c['source_id']==p['source_id'] and c['line_start']<=p['line_end'] and c['line_end']>=p['line_start'] for p in citations)]
+        selected.append(value)
+    return schema(proposals=selected, note='受控提取，不代表知识完整性。')
 
 
 def fixed_outline(store, case, sources, snapshots, aliases, language):
@@ -174,7 +185,8 @@ def run_suite(mode='smoke', case_ids=None, stage='all', language='zh', max_calls
     directory.mkdir(parents=True, exist_ok=False)
     code_files = ('quality_eval.py', 'evaluation_cases.py', 'evaluation_report.py', 'outline_service.py',
                   'outline_context.py', 'outline_grouping.py', 'outline_group_plan.py', 'outline_group_steps.py',
-                  'outline_integration.py', 'practice_model.py', 'structured_output.py', 'generation_budget.py')
+                  'outline_integration.py', 'outline_final_review.py','outline_final_store.py',
+                  'practice_model.py', 'structured_output.py', 'generation_budget.py')
     report = {'mode': mode, 'language': language, 'suite_revision': suite.revision, 'suite_fingerprint': digest,
         'reference_status': suite.reference_status, 'model': 'controlled-fixture', 'max_calls': max_calls,
         'code_sha256': {n: sha256((CORPUS.parent.parent / n).read_bytes()).hexdigest() for n in code_files},
@@ -190,7 +202,7 @@ def run_suite(mode='smoke', case_ids=None, stage='all', language='zh', max_calls
             report['model'], _ = model_client.model_settings()
             budget = GenerationBudget.from_env()
 
-        def request(messages, schema):
+        def request(messages, schema, **kwargs):
             if len(report['calls']) >= max_calls:
                 report['call_limit_reached'] = True
                 raise EvaluationCallLimit('达到本次逻辑任务调用上限。')
@@ -204,9 +216,10 @@ def run_suite(mode='smoke', case_ids=None, stage='all', language='zh', max_calls
                 # These requests contain only versioned synthetic data, no reference labels in live mode.
                 call['messages'] = messages
                 if mode == 'smoke':
+                    if kwargs.get('before_request'): kwargs['before_request']()
                     value = controlled_response(state['case'], state['aliases'], state['fixture_ids'], state['example'], messages, schema)
                 else:
-                    value = REAL_REQUEST(messages, schema)
+                    value = REAL_REQUEST(messages, schema, **kwargs)
                 call['status'] = 'returned'  # Publication validation still belongs to the service.
                 return value
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:

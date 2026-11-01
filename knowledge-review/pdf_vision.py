@@ -3,14 +3,15 @@
 import base64
 from dataclasses import dataclass
 from hashlib import sha256
+import json
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from dotenv import load_dotenv
-from agent_cancel import model_http_options
+from agent_cancel import model_http_options, checkpoint
 from openai import OpenAI, APIError
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from generation_budget import GenerationBudget
 from structured_output import request_structured
@@ -91,15 +92,47 @@ class PageTranscription(BaseModel):
     unresolved: list[str] = Field(max_length=30)
 
 
+class SuggestedRegion(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    label: str = Field(min_length=1, max_length=300)
+    bbox: list[Annotated[float, Field(strict=True, allow_inf_nan=False, ge=0, le=1)]] = Field(min_length=4, max_length=4,
+        description='[x0,y0,x1,y1] in 0..1 relative to the TARGET image as displayed, top-left origin.')
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode='after')
+    def valid_box(self):
+        from pdf_regions import checked_box
+        checked_box(self.bbox, normalized=True)
+        return self
+
+
 class VisualReading(BaseModel):
     model_config = ConfigDict(extra='forbid')
     observation: str = Field(min_length=1, max_length=6000)
     limitations: str = Field(max_length=2000)
+    suggested_regions: list[SuggestedRegion] = Field(default_factory=list,
+        description='Optional regions worth reading more closely in the target image; these are navigation, not verified evidence.')
+    next_read: str = Field(default='', max_length=2000,
+        description='Specific missing information and useful further reading, or empty when enough is visible. Do not invent what unread pages contain.')
 
 
 @dataclass(frozen=True)
 class VisionBudget(GenerationBudget):
     image_allowance: int = 8192
+    max_images: int = 8
+
+    @classmethod
+    def from_env(cls):
+        base = GenerationBudget.from_env()
+        try:
+            allowance = int(os.getenv('VLM_IMAGE_TOKEN_ALLOWANCE', '8192'))
+            count = int(os.getenv('VLM_MAX_IMAGES', '8'))
+            if allowance <= 0 or not 1 <= count <= 64:
+                raise ValueError()
+        except ValueError as exc:
+            raise ValueError('视觉资源配置无效：图片估算预算须为正整数，VLM_MAX_IMAGES 须为 1–64。') from exc
+        return cls(base.context_tokens, base.output_tokens, base.margin_tokens,
+                   'application image allowance; service capacity unverified', allowance, count)
 
     def usage(self, messages, **protocol):
         sanitized, images = [], 0
@@ -116,13 +149,13 @@ class VisionBudget(GenerationBudget):
                 sanitized.append({**message, 'content': parts})
             else:
                 sanitized.append(message)
-        if images > 2:
-            raise ValueError('每次视觉请求最多提供两张图片。')
+        if images > self.max_images:
+            raise ValueError(f'本次图片数量超过配置的资源上限 {self.max_images}。')
         return super().usage(sanitized, **protocol) + images * self.image_allowance
 
     def diagnostic(self, used):
         return {**super().diagnostic(used), 'count_method': 'text bytes + application image allowance; provider usage unverified',
-                'image_allowance': self.image_allowance}
+                'image_allowance': self.image_allowance, 'max_images': self.max_images}
 
 
 def enabled():
@@ -135,13 +168,12 @@ def vision_request(images, instruction, schema):
     identity = capability_key(model, options)
     if VISION_CAPABILITIES.get(identity) == 'unsupported':
         raise VisionUnsupported('当前模型服务不支持图片输入；常规解析结果保留，可配置支持图片的 VLM_MODEL 后重启。')
-    if len(images) > 2 or any(len(data) > 8 * 1024 * 1024 for data in images):
+    budget = VisionBudget.from_env()
+    if not images or len(images) > budget.max_images or any(len(data) > 8 * 1024 * 1024 for data in images) \
+            or sum(len(data) for data in images) > 32 * 1024 * 1024:
         raise ValueError('视觉图片数量或大小超过限制。')
     content = [{'type': 'text', 'text': instruction}]
     content.extend({'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + base64.b64encode(data).decode('ascii')}} for data in images)
-    base = GenerationBudget.from_env()
-    budget = VisionBudget(base.context_tokens, base.output_tokens, base.margin_tokens,
-                          'application image allowance; service capacity unverified')
     try:
         with OpenAI(**{**options, **model_http_options()}) as client:
             result = request_structured(client, model, [
@@ -160,23 +192,34 @@ def transcribe_page(image):
     return vision_request([image], 'Transcribe this page faithfully in reading order. Restore tables with their headers and units. Separate transcription from interpretation; do not summarize or complete missing text. Report unreadable regions.', PageTranscription)
 
 
-def inspect_visual(source, asset_id, question):
+def inspect_visual(source, asset_id, question, *, bbox=None, include_page=False):
+    checkpoint()
     if not isinstance(question, str) or not 1 <= len(question.strip()) <= 2000:
         raise ValueError('查看图片需要 1 至 2000 字符的问题。')
-    if source.document is None or source.document.format != 'pdf':
-        raise ValueError('这份资料没有可查看的 PDF 页面。')
-    asset = next((a for a in source.document.assets if a.asset_id == asset_id and a.page), None)
-    if asset is None:
-        raise ValueError('视觉资源不属于当前资料版本。')
-    block = next((b for b in source.document.blocks if asset_id in b.asset_ids), None)
-    if block is None:
-        raise ValueError('视觉资源没有可追溯的位置。')
+    if type(include_page) is not bool:
+        raise ValueError('include_page 必须为布尔值。')
+    from pdf_regions import select_region, page_anchor, navigation
+    asset = select_region(source, asset_id, bbox)
+    block = page_anchor(source, asset.page)
     from pdf_parser import render_asset
-    images = [render_asset(source, f'page-{asset.page}')]
-    if asset.bbox:
-        images.append(render_asset(source, asset_id))
+    # The model may request a page, a known region or a new crop directly. No fixed read order.
+    images = [render_asset(source, asset.asset_id, detail=bool(asset.bbox))]
+    viewed = [dict(asset_id=asset.asset_id, page=asset.page, bbox=asset.bbox,
+                   source_id=source.source_id, line_start=block.line_start, line_end=block.line_end)]
+    if include_page and asset.bbox:
+        images.append(render_asset(source, f'page-{asset.page}'))
+        viewed.append(dict(asset_id=f'page-{asset.page}', page=asset.page, bbox=None,
+                           source_id=source.source_id, line_start=block.line_start, line_end=block.line_end))
+    nav = navigation(source, asset)
+    instruction = ('The FIRST image is the TARGET. An optional second image is its full page for context. '
+        'Answer the reading question using visible evidence. Preserve conditions, labels, units and exceptions. '
+        'If detail is unreadable you may propose normalized crops relative to the FIRST image, or describe '
+        'specific missing information and useful further reading. Read order is your decision, not a fixed '
+        'page/zoom/neighbor sequence. Do not infer complete-table conclusions from partial data. '
+        'Navigation metadata does not mean those regions or neighboring pages have been read. '
+        + json.dumps(nav, ensure_ascii=False) + '\nReading question: ' + question)
     try:
-        reading = vision_request(images, f'The first image is the full page; a second image, if supplied, is the target region. Answer this question using visible evidence and explain limits. Do not claim complete-table calculations from a partial view. Question: {question}', VisualReading)
+        reading = vision_request(images, instruction, VisualReading)
     except APIError as exc:
         status = getattr(exc, 'status_code', None)
         category = type(exc).__name__
@@ -191,7 +234,15 @@ def inspect_visual(source, asset_id, question):
         else:
             message = '视觉模型请求未完成，请核对服务兼容性；尚不能据此判定它不支持图片。'
         raise VisionRequestFailed(message) from exc
-    return {'source_id': source.source_id, 'asset_id': asset_id, 'page': asset.page,
+    checkpoint()
+    suggestions = []
+    for region in reading.suggested_regions:
+        selected = select_region(source, asset.asset_id, region.bbox)
+        suggestions.append(dict(asset_id=selected.asset_id, label=region.label, reason=region.reason,
+                                bbox=selected.bbox, page=selected.page, viewed=False))
+    return {'source_id': source.source_id, 'asset_id': asset.asset_id, 'page': asset.page,
             'line_start': block.line_start, 'line_end': block.line_end,
             'observation': reading.observation, 'limitations': reading.limitations,
+            'viewed_assets': viewed, 'navigation': nav, 'suggested_regions': suggestions,
+            'next_read': reading.next_read,
             'method': 'vlm_visual_interpretation'}, block

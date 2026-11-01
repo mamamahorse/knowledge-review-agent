@@ -99,7 +99,10 @@ class AnswerText:
                 self.consume_value()
                 self.stack.append({'kind': c, 'path': path, 'key': None, 'index': 0, 'expect': 'key' if c == '{' else 'value'})
             elif c in '}]':
-                self.stack.pop()
+                # The preview grants no result authority. A redundant tail bracket
+                # must not discard text already decoded from this upstream fragment.
+                if self.stack:
+                    self.stack.pop()
             elif c == ':':
                 self.stack[-1]['expect'] = 'value'
             elif c == ',':
@@ -113,13 +116,14 @@ class AnswerText:
                 self.emit(text[offset:offset + 1024])
 
 
-def collect_answer(client, parameters, schema, emit, *, tools=False):
+def collect_answer(client, parameters, schema, emit, *, tools=False, decoder=None, observer=None):
     lexer = AnswerText(emit)
     parts = []
     size = 0
     finished = None
     names = {}
     pending = ''
+    preview_valid = True
     with client.chat.completions.create(**parameters, stream=True) as stream:
         for chunk in stream:
             checkpoint()
@@ -150,11 +154,19 @@ def collect_answer(client, parameters, schema, emit, *, tools=False):
             if tools and names.get(0) != 'submit_result':
                 pending += piece
             else:
-                lexer.feed(pending + piece)
+                if preview_valid:
+                    try:
+                        lexer.feed(pending + piece)
+                    except (IndexError, KeyError, ValueError):
+                        # A malformed JSON preview is not a completed result. Collect the full
+                        # payload for auditable repair/validation instead of crashing the lexer.
+                        preview_valid = False
                 pending = ''
             if choice.finish_reason:
                 finished = choice.finish_reason
+    if observer:
+        observer(''.join(parts), finished)
     if finished not in ('stop', 'tool_calls') or (tools and names != {0: 'submit_result'}):
         raise RuntimeError('The model stream ended without a complete result')
     checkpoint()
-    return schema.model_validate_json(''.join(parts))
+    return decoder(''.join(parts)) if decoder else schema.model_validate_json(''.join(parts))

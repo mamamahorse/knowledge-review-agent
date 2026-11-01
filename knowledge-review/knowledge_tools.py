@@ -286,14 +286,16 @@ class KnowledgeTools:
                       'notice': 'Coverage describes this extracted table only, not proof that PDF extraction is complete. Partial rows cannot establish a global maximum, total or trend.'}
             return ToolExecution(output, tuple(chunks))
         if name == 'inspect_visual':
-            if set(arguments) != {'source_id', 'asset_id', 'question'}:
-                raise ValueError('inspect_visual requires source_id, asset_id, and question.')
+            required = {'source_id', 'asset_id', 'question'}
+            if not required <= set(arguments) or set(arguments) - required - {'bbox', 'include_page'}:
+                raise ValueError('inspect_visual requires source_id, asset_id, question; optional bbox and include_page.')
             from pdf_vision import inspect_visual
             source = next((s for s in self.sources if s.source_id == arguments['source_id']), None)
             if source is None:
                 raise ValueError('只能查看本次许可的当前资料版本。')
             try:
-                observation, block = inspect_visual(source, arguments['asset_id'], arguments['question'])
+                observation, block = inspect_visual(source, arguments['asset_id'], arguments['question'],
+                    bbox=arguments.get('bbox'), include_page=arguments.get('include_page', False))
             except (RuntimeError, OSError) as exc:
                 raise ValueError(f'视觉查看未完成（{type(exc).__name__}），请保留证据缺口。') from exc
             return ToolExecution(observation, (block_chunk(source, block),), observation)
@@ -339,9 +341,13 @@ def knowledge_tool_definitions(*, include_visual=False, include_tables=False) ->
                 'required': ['source_id', 'block_id', 'row_start', 'row_end']}})
     if include_visual:
         definitions.append({'name': 'inspect_visual',
-            'description': 'Inspect a loaded PDF page or figure using its asset_id (page-N for a physical page). Use this for visual evidence; table-wide numeric conclusions require complete data.',
+            'description': 'Read a PDF page (page-N), known region or returned crop ID. Choose direct region reading, page overview, zoom or another page according to the missing evidence; no fixed order. bbox optionally selects a new crop relative to the chosen image. include_page optionally adds its full page. Navigation and suggested regions are not viewed evidence. Table-wide numeric claims need complete data.',
             'parameters': {'type': 'object', 'additionalProperties': False,
                 'properties': {'source_id': {'type': 'string'}, 'asset_id': {'type': 'string'},
-                               'question': {'type': 'string', 'maxLength': 2000}},
+                               'question': {'type': 'string', 'maxLength': 2000},
+                               'bbox': {'type': 'array', 'minItems': 4, 'maxItems': 4,
+                                        'items': {'type': 'number', 'minimum': 0, 'maximum': 1},
+                                        'description': '[x0,y0,x1,y1], top-left origin, normalized to the selected image, not PDF coordinates.'},
+                               'include_page': {'type': 'boolean', 'description': 'Also show the full page when reading a region. Default false.'}},
                 'required': ['source_id', 'asset_id', 'question']}})
     return definitions

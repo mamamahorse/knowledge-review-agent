@@ -14,8 +14,8 @@ class BudgetError(ValueError):
 
 @dataclass(frozen=True)
 class GenerationBudget:
-    context_tokens: int = 32768
-    output_tokens: int = 4096
+    context_tokens: int = 131072
+    output_tokens: int = 12288
     margin_tokens: int = 2048
     capacity_source: str = "application fallback; service capacity unverified"
 
@@ -59,9 +59,9 @@ class GenerationBudget:
     @classmethod
     def from_env(cls):
         try:
-            return cls(int(os.getenv("LLM_CONTEXT_TOKENS", "32768")),
-                       int(os.getenv("LLM_OUTPUT_TOKENS", "4096")),
-                       int(os.getenv("LLM_SAFETY_TOKENS", "2048")),
+            return cls(int(os.getenv("LLM_CONTEXT_TOKENS", str(cls.context_tokens))),
+                       int(os.getenv("LLM_OUTPUT_TOKENS", str(cls.output_tokens))),
+                       int(os.getenv("LLM_SAFETY_TOKENS", str(cls.margin_tokens))),
                        "explicit LLM_CONTEXT_TOKENS" if os.getenv("LLM_CONTEXT_TOKENS") else
                        "application fallback; service capacity unverified")
         except ValueError as exc:

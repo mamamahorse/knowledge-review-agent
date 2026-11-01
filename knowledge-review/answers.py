@@ -83,7 +83,8 @@ def validate_answer(
             if citation.asset_id is not None and not any(
                 v['source_id'] == citation.source_id and v['asset_id'] == citation.asset_id
                 and v['line_start'] <= citation.line_start <= citation.line_end <= v['line_end']
-                for v in visual_evidence or []):
+                for receipt in visual_evidence or []
+                for v in receipt.get('viewed_assets', [receipt])):
                 raise RuntimeError('the model cited a visual asset that was not successfully viewed.')
             if citation.asset_id is None and source.document and source.document.format == 'pdf':
                 evidence_blocks = [b for b in source.document.blocks

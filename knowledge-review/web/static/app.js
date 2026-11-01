@@ -205,9 +205,11 @@ async function showCitation(citation) {
     const block = (doc.blocks || []).find((b) => b.line_start <= citation.line_end && b.line_end >= citation.line_start && b.asset_ids.length);
     const assetId = citation.asset_id || block?.asset_ids[0] || (page ? `page-${page}` : null);
     const asset = doc.assets.find((a) => a.asset_id === assetId);
-    if (asset) {
+    const assetUrl = asset?.url || (citation.asset_id
+      ? `/api/documents/${encodeURIComponent(citation.document_id)}/assets/${encodeURIComponent(citation.asset_id)}?source_id=${encodeURIComponent(citation.source_id)}` : null);
+    if (assetUrl) {
       const dialog = document.createElement('dialog'); dialog.className = 'citation-snapshot';
-      const img = document.createElement('img'); img.src = asset.url; img.alt = citationLabel(citation); img.style.maxWidth = '100%';
+      const img = document.createElement('img'); img.src = assetUrl; img.alt = citationLabel(citation); img.style.maxWidth = '100%';
       const close = makeElement('button', '', '关闭'); close.addEventListener('click', () => dialog.close());
       dialog.append(makeElement('h3', '', citationLabel(citation)), makeElement('pre', '', citation.excerpt), img, close);
       dialog.addEventListener('close', () => dialog.remove()); document.body.append(dialog); dialog.showModal(); return;

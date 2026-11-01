@@ -16,12 +16,12 @@ from answers import StrictModel
 
 class EnrollmentDraft(StrictModel):
     learning: LearningDraft
-    criterion_indices: list[int] = Field(min_length=2, max_length=4,
+    criterion_indices: list[int] = Field(min_length=2,
         description="Each saved rubric point's 1-based reusable target criterion index; together cover all target criteria.")
 
 
 class VariantDraft(QuestionDraft):
-    criterion_indices: list[int] = Field(min_length=2, max_length=4,
+    criterion_indices: list[int] = Field(min_length=2,
         description="Each rubric point's 1-based fixed target criterion index; cover every target criterion.")
 
 

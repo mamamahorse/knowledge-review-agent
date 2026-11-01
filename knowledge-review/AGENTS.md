@@ -1,5 +1,7 @@
 # Knowledge Review 开发约定
 
+2026-10-30：多模态方案首批仅完成PDF自主视觉导航。inspect_visual增加可选bbox（相对所选图像的0..1坐标）和include_page，默认不附整页；pdf_regions.py提供来源版本绑定的crop1区域ID，按实际旋转/CropBox映射并从原件有界重渲染。suggested_regions/navigation不授予引用权，viewed_assets只包含实际发送图像，旧回执兼容。VLM_MAX_IMAGES/VLM_IMAGE_TOKEN_ALLOWANCE为资源配置，不是阅读顺序规则。相关84项受控测试通过，无真实模型验收；资料分片、派生索引、清单自主补读及整体复查仍未完成。见docs/pdf-visual-navigation.md，勿把工作区旧outline_final_review草稿视作已验收。
+
 V2实验分支：outline_v2.py按ContentBlock和完整请求预算直接提取，plan.version=2保存generation_budget/模型端点身份，恢复与实际SDK使用该预算。V1/legacy保留，API和网页仍默认V1。V2默认应用预算131072可配置，计数仍是UTF-8字节保守估算；未声称服务精确token计数。结构拆批父项superseded，主范围并集覆盖，辅助表头不单独产目标，失败/重试usage诊断保留。候选上限与截断触发有限拆分。尚无真实V1/V2质量/费用结论；docs/outline-v2-experiment-plan.md必须待本轮用户确认后才能执行。
 
 2026-10-26：用户授权分阶段实现并本地 Git 提交任务识别/ask_question，然后在新 codex/ 分支实现清单 V2、配置约128k实验预算；真实模型对照须先交付方案并等待确认。任务识别已采用 task_routing 注册表、控制动作独占、waiting_user 持久卡片和显式任务入口；入口卡片不等于已启动业务。原 request_json 不覆盖，恢复重做来源校验，等待释放实际工作槽。说明见 docs/task-routing-implementation.md。保留旧算法，未经对照决策不切默认路径；未授权推送/部署。

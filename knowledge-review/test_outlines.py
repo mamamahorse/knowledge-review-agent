@@ -33,18 +33,30 @@ def proposal(source_id, start):
         'citations': [Citation(source_id=source_id, line_start=start, line_end=start)]})}).model_dump())
 
 
+def wire_proposal(learning, registry):
+    value = learning.model_dump()
+    cites = value['knowledge'].pop('citations')
+    value['knowledge']['evidence_ids'] = [ref for ref,c in registry.items() if any(
+        c['source_id']==p['source_id'] and c['line_start']<=p['line_end'] and c['line_end']>=p['line_start'] for p in cites)] or ['ref_not_provided']
+    return value
+
+
 def fake_model(messages, schema):
     data = json.loads(messages[1]['content'])
     source_id = re.search(r'Source ID: ([^\n]+)', data['sources'])[1]
     start = int(re.search(r'Visible lines: L(\d+)', data['sources'])[1])
     if schema in (OutlineDraft, FullOutlineDraft):
-        return schema(proposals=[proposal(source_id, start)], note='本段可生成一个目标。')
+        return schema(proposals=[wire_proposal(proposal(source_id, start),data['available_evidence'])], note='本段可生成一个目标。')
     draft = learning_question()
     return draft.model_copy(update={'citations': [Citation(source_id=source_id, line_start=start, line_end=start)]})
 
 
 class OutlineTests(unittest.TestCase):
     def setUp(self):
+        # Extraction-focused tests isolate the new automatic second workflow.
+        # test_outline_final_review exercises the real end-to-end default.
+        self.auto_finalize=patch('outline_service.run_final_review_after_extraction')
+        self.auto_finalize.start(); self.addCleanup(self.auto_finalize.stop)
         self.temp = temporary_notes()
         self.root = self.temp.__enter__()
         self.practice = LearningStore(self.root / 'practice.sqlite3')
@@ -101,7 +113,7 @@ class OutlineTests(unittest.TestCase):
             self.assertTrue(fits_request(budget, outline_messages(source, sections[0], chunk, '了解范围', 'en'), OutlineDraft))
 
     def test_oversize_line_is_explicitly_unanalyzed_without_losing_following_lines(self):
-        source = Source('v', Path('s.md'), '# 章节\n' + 'x' * 40000 + '\n正常内容')
+        source = Source('v', Path('s.md'), '# 章节\n' + 'x' * (GenerationBudget.from_env().context_tokens + 1) + '\n正常内容')
         sections, batches = prepare_outline([source], [{'document_id': 's', 'name': 's.md'}], '', 'zh')
         self.assertEqual([(b['line_start'], b['line_end']) for b in batches], [(1, 1), (2, 2), (3, 3)])
         self.assertEqual(batches[1]['status'], 'failed')
@@ -143,7 +155,7 @@ class OutlineTests(unittest.TestCase):
 
     def test_invalid_citation_does_not_publish_model_proposals(self):
         identity = self.create()
-        invalid = OutlineDraft(proposals=[proposal(self.source.source_id, 7)], note='bad')
+        invalid = OutlineDraft(proposals=[wire_proposal(proposal(self.source.source_id, 7),{})], note='bad')
         with patch('outline_service._request_structured', return_value=invalid):
             run_outline(self.store, identity, self.current)
         self.assertEqual(self.store.get(identity)['candidates'], [])
@@ -200,6 +212,38 @@ class OutlineTests(unittest.TestCase):
         with patch('outline_service._request_structured', side_effect=fake_model):
             enroll_candidate(self.store, candidate['id'], 1, 'root', None, 'zh', self.current)
         self.assertEqual(self.counts(), [1, 1, 1, 0, 1])
+
+    def test_five_criteria_survive_edit_enrollment_and_review_without_dropping_conditions(self):
+        from learning_service import start_review
+        _, candidate = self.generated()
+        data = candidate['learning']
+        criteria = [f'Necessary condition {n}' for n in range(1, 6)]
+        data['target']['criteria'] = criteria
+        reviewed = LearningProposal.model_validate(data)
+        revision = edit_candidate(self.store, candidate['id'], reviewed, candidate['revision'])
+
+        def seed(messages, schema, missing=False):
+            value = fake_model(messages, schema).model_dump()
+            value.update(rubric_points=criteria[:4] if missing else criteria,
+                         criterion_indices=[1, 2, 3, 4] if missing else [1, 2, 3, 4, 5])
+            return schema.model_validate(value)
+
+        with patch('outline_service._request_structured', side_effect=lambda m, s: seed(m, s, missing=True)):
+            with self.assertRaisesRegex(ValueError, 'cover the stable target criteria'):
+                enroll_candidate(self.store, candidate['id'], revision, 'root', None, 'zh', self.current)
+        self.assertEqual(self.counts(), [0, 0, 0, 0, 0])
+        with patch('outline_service._request_structured', side_effect=seed):
+            enrolled = enroll_candidate(self.store, candidate['id'], revision, 'root', None, 'zh', self.current)
+        self.assertEqual(self.practice.item(enrolled['item_id'])['target']['criteria'], criteria)
+        original = self.practice.get(enrolled['session_id'])['questions'][0]['draft']
+        self.assertEqual(original.rubric_points, criteria)
+        self.assertEqual(original.criterion_indices, [1, 2, 3, 4, 5])
+        self.practice.finish(enrolled['session_id'])
+        with patch('learning_service._request_structured', side_effect=seed):
+            review = start_review(self.practice, enrolled['item_id'], mode='variant')
+        draft = self.practice.get(review['id'])['questions'][0]['draft']
+        self.assertEqual(draft.learning.target.criteria, criteria)
+        self.assertEqual(draft.rubric_points, criteria)
 
     def test_changed_scope_blocks_enrollment_and_changes_during_generation_reject_publication(self):
         identity, candidate = self.generated()

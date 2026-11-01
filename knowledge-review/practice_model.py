@@ -26,13 +26,15 @@ class ExerciseDraft(StrictModel):
 
 
 class QuestionDraft(ExerciseDraft):
+    rubric_points: list[str] = Field(min_length=2,
+        description="Distinct assessable rubric points. Prefer two to four, but include enough to cover every necessary target criterion; never drop conditions to meet a count.")
     learning: LearningDraft | None = None
     criterion_indices: list[int] = Field(default_factory=list, description="For each rubric point, its 1-based stable target criterion index.")
 
 
 class LearningQuestionDraft(QuestionDraft):
     learning: LearningDraft
-    criterion_indices: list[int] = Field(min_length=2, max_length=4, description="Each rubric point's 1-based stable target criterion index; collectively cover the target criteria.")
+    criterion_indices: list[int] = Field(min_length=2, description="Each rubric point's 1-based stable target criterion index; collectively cover all target criteria, including targets with more than four criteria.")
 
 
 class DiscussionKnowledge(KnowledgeDraft):
@@ -47,7 +49,7 @@ class DiscussionQuestion(QuestionDraft):
     basis_type: Literal['discussion'] = 'discussion'
     citations: list[Citation] = Field(max_length=0)
     learning: DiscussionLearning
-    criterion_indices: list[int] = Field(min_length=2, max_length=4,
+    criterion_indices: list[int] = Field(min_length=2,
         description="For each rubric point, the 1-based index of the stable target criterion it assesses. Cover every target criterion.")
 
 

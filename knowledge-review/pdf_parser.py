@@ -283,20 +283,31 @@ def raw_path(source):
     return path
 
 
-def render_page(page, bbox=None):
+def render_page(page, bbox=None, *, detail=False):
     pdf = pdf_library()
     # Asset boxes are unrotated PDF coordinates; transform to rendered page space.
     clip = pdf.Rect(bbox) * page.rotation_matrix if bbox else page.rect
     clip &= page.rect
     if clip.is_empty or clip.get_area() <= 0:
         raise ValueError('页面区域无效。')
-    scale = min(2.0, math.sqrt(MAX_RENDER_PIXELS / clip.get_area()))
+    # A crop is re-rendered from the original, not enlarged from a low-resolution preview.
+    # Leave rounding room so the raster remains inside the pixel resource limit.
+    # The two-pixel slack per axis covers raster rounding, including very thin crops.
+    perimeter = clip.width + clip.height
+    scale = (MAX_RENDER_PIXELS - 4) / (
+        math.sqrt(perimeter * perimeter + clip.get_area() * (MAX_RENDER_PIXELS - 4)) + perimeter)
+    scale = min(scale, 8190 / max(clip.width, clip.height))
+    if not detail:
+        scale = min(2.0, scale)
     return page.get_pixmap(matrix=pdf.Matrix(scale, scale), clip=clip, alpha=False).tobytes('png')
 
 
-def render_asset(source, asset_id):
-    asset = next((a for a in source.document.assets if a.asset_id == asset_id), None) if source.document else None
-    if asset is None or asset.page is None:
-        raise ValueError('找不到可查看的页面或区域。')
+def render_asset(source, asset_id, *, detail=None):
+    from pdf_regions import resolve_asset, displayed_rect
+    asset = resolve_asset(source, asset_id)
+    if detail is None:
+        detail = asset.kind == 'region'
     with pdf_library().open(raw_path(source)) as handle:
-        return render_page(handle[asset.page - 1], asset.bbox)
+        page = handle[asset.page - 1]
+        displayed_rect(page, asset)
+        return render_page(page, asset.bbox, detail=detail)

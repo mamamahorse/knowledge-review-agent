@@ -64,7 +64,7 @@ class EvaluationTests(unittest.TestCase):
             directory, report = self.run_case()
         provider.assert_not_called()
         self.assertTrue(report['completed'])
-        self.assertEqual(len(report['calls']), 6)
+        self.assertEqual(len(report['calls']), 8)
         self.assertEqual(report['cases'][0]['learning_records'], {'review_items': 0, 'review_events': 0})
         with closing(sqlite3.connect(directory / 'small_tcp.sqlite3')) as db:
             self.assertEqual(db.execute('SELECT count(*) FROM practice_questions WHERE answer_text IS NOT NULL').fetchone()[0], 4)
@@ -84,7 +84,8 @@ class EvaluationTests(unittest.TestCase):
     def test_live_request_has_no_reference_answers_or_relation_labels(self):
         case = self.suite.cases[0]
         _, _, aliases = sources_for(case, CORPUS.parent)
-        def fake_live(messages, schema):
+        def fake_live(messages, schema, **kwargs):
+            if kwargs.get('before_request'): kwargs['before_request']()
             raw = json.dumps(messages, ensure_ascii=False)
             for field in ('expected_assessments', 'expected_covered', 'reference_points', 'forbidden', 'rationale'):
                 self.assertNotIn(field, raw)
@@ -139,7 +140,7 @@ class EvaluationTests(unittest.TestCase):
         def invalid(*args):
             value = original(*args)
             if value.__class__.__name__ in ('FullOutlineDraft', 'OutlineDraft') and value.proposals:
-                value.proposals[0].knowledge.citations[0].line_end = 9000
+                value.proposals[0].knowledge.evidence_ids = ['ref_not_provided']
             return value
         with patch('quality_eval.controlled_response', side_effect=invalid):
             _, report = self.run_case(stage='extraction')

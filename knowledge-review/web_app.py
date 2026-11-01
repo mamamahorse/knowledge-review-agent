@@ -598,7 +598,33 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
 
     @app.post('/api/outlines/{identity}/pause')
     def pause_outline(identity: str):
-        return outline_action(lambda: (outlines.pause(identity), streams.cancel_job('outline', identity), {'id': identity})[2])
+        def action():
+            from outline_final_store import latest, pause
+            review=latest(outlines,identity)
+            if review:
+                pause(outlines,review['id']); streams.cancel_job('final_review',review['id'])
+            outlines.pause(identity); streams.cancel_job('outline', identity)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/outline-final-reviews/{identity}/resume',status_code=202)
+    @streams.detached('final_review',resume=True)
+    def resume_final_outline(identity: str, payload: OutlineGroupContinueRequest, background: BackgroundTasks):
+        def action():
+            from outline_final_store import resume
+            from outline_final_review import run_final_review
+            resume(outlines,identity,collection_snapshots,payload.call_limit)
+            background.add_task(run_final_review,outlines,identity,collection_snapshots)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/outline-final-reviews/{identity}/pause')
+    def pause_final_outline(identity: str):
+        def action():
+            from outline_final_store import record,pause
+            record(outlines,identity); pause(outlines,identity); streams.cancel_job('final_review',identity)
+            return {'id':identity}
+        return outline_action(action)
 
     @app.patch('/api/outline-candidates/{identity}')
     def update_outline_candidate(identity: str, payload: OutlineEditRequest):
