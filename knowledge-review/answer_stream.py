@@ -122,6 +122,8 @@ def collect_answer(client, parameters, schema, emit, *, tools=False, decoder=Non
     size = 0
     finished = None
     names = {}
+    call_ids = {}
+    reasoning = []
     pending = ''
     preview_valid = True
     with client.chat.completions.create(**parameters, stream=True) as stream:
@@ -131,11 +133,15 @@ def collect_answer(client, parameters, schema, emit, *, tools=False, decoder=Non
                 continue
             choice = chunk.choices[0]
             delta = choice.delta
+            if getattr(delta, 'reasoning_content', None):
+                reasoning.append(delta.reasoning_content)
             if getattr(delta, 'refusal', None):
                 raise RuntimeError('The model declined the request')
             if tools:
                 piece = ''
                 for call in delta.tool_calls or []:
+                    if call.id:
+                        call_ids[call.index] = call.id
                     if call.index != 0:
                         raise RuntimeError('Expected one structured result')
                     if call.function:
@@ -165,7 +171,7 @@ def collect_answer(client, parameters, schema, emit, *, tools=False, decoder=Non
             if choice.finish_reason:
                 finished = choice.finish_reason
     if observer:
-        observer(''.join(parts), finished)
+        observer(''.join(parts), finished, ''.join(reasoning), call_ids.get(0), names.get(0))
     if finished not in ('stop', 'tool_calls') or (tools and names != {0: 'submit_result'}):
         raise RuntimeError('The model stream ended without a complete result')
     checkpoint()

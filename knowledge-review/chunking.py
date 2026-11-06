@@ -6,6 +6,7 @@ from hashlib import sha256
 from markdown_it import MarkdownIt
 
 from sources import Source
+from source_reader import read_lines
 
 CHUNK_ALGORITHM = "markdown-blocks-v2"
 
@@ -124,20 +125,21 @@ def chunk_source(source: Source, max_chars: int = 1200, min_chars: int = 100) ->
 def block_chunk(source, block, start=None, end=None, *, lines=None):
     start = block.line_start if start is None else start
     end = block.line_end if end is None else end
-    lines = source.text.splitlines() if lines is None else lines
+    def text_between(a,b):
+        return '\n'.join(lines[a-1:b]) if lines is not None else read_lines(source,a,b)
     context = tuple((a, b) for a, b in block.context_ranges if not (start <= a and end >= b))
     header = ''
     if block.header_end is not None:
-        header = '\n'.join(lines[block.line_start - 1:block.header_end])
+        header = text_between(block.line_start,block.header_end)
         if start > block.line_start or end < block.header_end:
             context = (*context, (block.line_start, block.header_end))
     if block.context_ranges:
-        header = '\n'.join(['\n'.join(lines[a - 1:b]) for a, b in block.context_ranges] + [header])
+        header = '\n'.join([text_between(a,b) for a, b in block.context_ranges] + [header])
     identity = f'{source.source_id}:structured-v1:{start}:{end}:{block.block_id}'
     if block.context_ranges:
         identity += ':context-v1:' + str(block.context_ranges)
     return Chunk(sha256(identity.encode()).hexdigest(),
-        source.source_id, block.heading_path, start, end, '\n'.join(lines[start - 1:end]),
+        source.source_id, block.heading_path, start, end, text_between(start,end),
         (block.heading_path,), block.block_id, block.kind, context, header,
         block.kind in ('table', 'figure', 'formula'),
         (block.line_start, block.header_end) if block.header_end is not None else None)
@@ -200,7 +202,7 @@ def with_table_context(chunks, sources):
             if key not in seen:
                 source = by_id[chunk.source_id]
                 result.append(Chunk(sha256(f'{key}:table-header-v1'.encode()).hexdigest(), chunk.source_id,
-                    chunk.heading_path, start, end, '\n'.join(source.text.splitlines()[start - 1:end]),
+                    chunk.heading_path, start, end, read_lines(source,start,end),
                     chunk.section_paths, chunk.block_id,
                     'table_header' if (start, end) == chunk.table_header_range else 'table_context', atomic=True))
                 seen.add(key)
@@ -212,8 +214,8 @@ def with_table_context(chunks, sources):
 
 
 def protect_selection(chunk, source):
-    tables = [b for b in source.document.blocks if b.kind == 'table'
-              and b.line_start <= chunk.line_end and b.line_end >= chunk.line_start] if source.document else []
+    from source_archive import blocks_for
+    tables = [b for b in blocks_for(source,chunk.line_start,chunk.line_end) if b.kind=='table']
     if not tables:
         return [chunk]
     ranges = []

@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from practice_model import GradeDraft, QuestionDraft, parse_question, parse_grade
+from practice_model import GradeDraft, QuestionDraft, parse_question, parse_grade, visual_receipts
 from practice_provenance import initialize as initialize_provenance, check_session, basis_record, check_dependencies
 from sources import Source
+from source_reader import read_lines, open_snapshot
 from response_preferences import ResponseLanguage, validate_language
 from learning_state import initialize, record_evaluation
 from library_store import initialize_library
@@ -351,7 +352,7 @@ class PracticeStore:
 
 def archived_sources(snapshots: list[dict]) -> list[Source]:
     from document_model import Document
-    return [Source(item["source_id"], Path(item["path"]), item["text"],
+    return [open_snapshot(item) if item.get("reader") else Source(item["source_id"], Path(item["path"]), item["text"],
                    Document.from_dict(item['document']) if item.get('document') else None) for item in snapshots]
 
 
@@ -365,14 +366,18 @@ def public_session(record: dict) -> dict:
         citations = []
         for citation in draft.citations:
             source = snapshots[citation.source_id]
+            observation = next((receipt for receipt in visual_receipts(record) if citation.asset_id is not None and any(
+                v['source_id']==citation.source_id and v['asset_id']==citation.asset_id
+                and v['line_start'] <= citation.line_start <= citation.line_end <= v['line_end']
+                for v in receipt.get('viewed_assets',[receipt]))), None)
             citations.append({
                 "document_id": source["document_id"], "source_id": citation.source_id,
                 "name": source["name"], "line_start": citation.line_start,
                 "line_end": citation.line_end,
                 **citation_metadata(structured[citation.source_id], citation),
-                "excerpt": "\n".join(source["text"].splitlines()[
-                    citation.line_start - 1:citation.line_end
-                ]),
+                **({'visual_limitations':observation['limitations']} if observation else {}),
+                "excerpt": observation['observation'] if observation else read_lines(structured[citation.source_id],
+                    citation.line_start,citation.line_end),
             })
         grade = question["grade"]
         questions.append({

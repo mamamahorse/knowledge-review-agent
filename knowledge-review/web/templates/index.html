@@ -17,6 +17,7 @@
   <script src="/static/outline-review.js?v={{ asset_version }}" defer></script>
   <script src="/static/outline-route.js?v={{ asset_version }}" defer></script>
   <script src="/static/outlines.js?v={{ asset_version }}" defer></script>
+  <script src="/static/learning-planner.js?v={{ asset_version }}" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -39,7 +40,7 @@
       </div>
       <div class="panel-heading">
         <div><span class="eyebrow">LIBRARY</span><h2>知识库</h2></div>
-        <label class="import-button" title="导入 Markdown 或 PDF">＋<input id="import-files" type="file" accept=".md,.pdf,text/markdown,application/pdf" multiple hidden></label>
+        <label class="import-button" title="导入资料；一份Markdown可同时附带图片">＋<input id="import-files" type="file" accept=".md,.pdf,.png,.jpg,.jpeg,.webp" multiple hidden></label>
       </div>
       <div id="collection-tree" class="collection-tree" aria-label="知识库和子集合"></div>
       <details class="collection-editor"><summary>新建知识库或子集合</summary>
@@ -78,6 +79,19 @@
           <button id="view-source" type="button">原文行号</button>
         </div>
       </div>
+      <details class="outline-panel" id="learning-planner-panel">
+        <summary>当前资料的自主学习清单（实验）</summary>
+        <p class="practice-hint">自主阅读 → 能力规划 → 正式目标与考核标准 → 自动整体复查。完成后可选择目标出题，不会自动加入复习计划。</p>
+        <form id="learning-planner-form">
+          <label>学习方向 <input id="learning-planner-objective" maxlength="300" value="整理值得掌握的能力及必要条件"></label>
+          <label>请求额度 <input id="learning-planner-limit" type="number" min="1" max="128" value="16"></label>
+          <label><input id="learning-planner-visual" type="checkbox">检查图表与公式的视觉覆盖（需要视觉模型，占用上述额度）</label>
+          <button type="submit">生成当前资料的学习清单</button>
+        </form>
+        <button id="learning-planner-refresh" type="button">刷新规划历史</button>
+        <select id="learning-planner-history" aria-label="规划历史"></select>
+        <div id="learning-planner-result" aria-live="polite"></div>
+      </details>
       <div id="reader-scroll" class="reader-scroll">
         <article id="rendered-note" class="markdown-body"></article>
         <div id="source-note" class="source-note" hidden></div>

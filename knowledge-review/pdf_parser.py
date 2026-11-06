@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 from dotenv import load_dotenv
+from agent_cancel import checkpoint
 
 from document_model import Asset, ContentBlock, Document, Location, digest, attach_table_context
 
@@ -70,7 +71,8 @@ def load_pdf(path: Path, *, force=False, use_vlm=None) -> Document:
                 return result
         except (ValueError, KeyError, TypeError):
             pass
-    result = parse_pdf(data, raw_file=path.name, config=config)
+    result = parse_pdf(data, raw_file=path.name, config=config,
+                       checkpoint_dir=path.parent / '.parsed' / 'pages', force=force)
     cache.parent.mkdir(parents=True, exist_ok=True)
     pending = cache.with_name(uuid4().hex + '.tmp')
     try:
@@ -91,7 +93,7 @@ def table_text(rows):
     return '\n'.join([lines[0], '| ' + ' | '.join('---' for _ in range(width)) + ' |', *lines[1:]])
 
 
-def parse_pdf(data: bytes, *, raw_file: str, config=None) -> Document:
+def parse_pdf(data: bytes, *, raw_file: str, config=None, checkpoint_dir=None, force=False) -> Document:
     if not data or len(data) > MAX_PDF_BYTES:
         raise ValueError('PDF 不能为空，且不能超过 20 MB。')
     config = profile() if config is None else config
@@ -106,54 +108,15 @@ def parse_pdf(data: bytes, *, raw_file: str, config=None) -> Document:
             raise ValueError(f'PDF 需要密码、没有页面或超过 {MAX_PAGES} 页。')
         pages, issues, attempts = [], [], []
         for page in handle:
-            items, table_boxes = [], []
-            try:
-                for table in page.find_tables().tables:
-                    rows = table.extract()
-                    if rows and len(rows) >= 2:
-                        bbox = tuple(table.bbox)
-                        table_boxes.append(pdf.Rect(bbox))
-                        # External headers are real page text, not an invented first row.
-                        if table.header.external and any(table.header.names):
-                            rows.insert(0, table.header.names)
-                        if any(value is None for row in rows for value in row):
-                            issues.append({'page': page.number + 1, 'code': 'table_structure_needs_review'})
-                        items.append({'kind': 'table', 'text': table_text(rows), 'bbox': bbox,
-                                      'table_data': {'rows': rows, 'cells': table.cells,
-                                                     'header_names': table.header.names,
-                                                     'header_external': table.header.external}})
-            except Exception:
-                issues.append({'page': page.number + 1, 'code': 'table_detection_failed'})
-            for block in page.get_text('dict', sort=True)['blocks']:
-                if block['type'] != 0:
-                    continue
-                rect = pdf.Rect(block['bbox'])
-                if any((rect & box).get_area() / max(rect.get_area(), 1) > .65 for box in table_boxes):
-                    continue
-                text = '\n'.join(''.join(span['text'] for span in line['spans']) for line in block['lines']).strip()
-                if text:
-                    items.append({'kind': 'paragraph', 'text': text, 'bbox': tuple(rect)})
-            regions = [pdf.Rect(info['bbox']) for info in page.get_image_info()]
-            try:
-                regions += [pdf.Rect(box) for box in page.cluster_drawings() if pdf.Rect(box).width >= 60 and pdf.Rect(box).height >= 40]
-            except Exception:
-                pass  # The full page asset always retains vector graphics.
-            figures = []
-            for rect in regions:
-                if rect.is_empty or any((rect & box).get_area() / max(rect.get_area(), 1) > .65 for box in table_boxes + figures):
-                    continue
-                figures.append(rect)
-                items.append({'kind': 'figure', 'text': '', 'bbox': tuple(rect)})
-            text = page.get_text()
-            if '\ufffd' in text or text.count('\x00'):
-                issues.append({'page': page.number + 1, 'code': 'garbled_text'})
-            if len(text.strip()) < 20 and figures:
-                issues.append({'page': page.number + 1, 'code': 'visual_content_needs_review'})
-            paragraphs = [i for i in items if i['kind'] == 'paragraph']
-            if any(a['bbox'][2] <= b['bbox'][0] and min(a['bbox'][3], b['bbox'][3]) - max(a['bbox'][1], b['bbox'][1]) > 25
-                   for a in paragraphs for b in paragraphs):
-                issues.append({'page': page.number + 1, 'code': 'reading_order_needs_review'})
-            pages.append(sorted(items, key=lambda i: (i['bbox'][1], i['bbox'][0])))
+            checkpoint()
+            if checkpoint_dir is None:
+                parsed = extract_page(page)
+            else:
+                from pdf_parse_cache import read_page
+                parsed = read_page(checkpoint_dir, raw_hash, config, page.number + 1,
+                                   lambda: extract_page(page), force=force)
+            pages.append(parsed['items'])
+            issues.extend(parsed['issues'])
 
         if config['engine'] == 'docling':
             try:
@@ -230,6 +193,7 @@ def parse_pdf(data: bytes, *, raw_file: str, config=None) -> Document:
                 lines.extend(['本页没有提取到可检索正文；可查看原始页面。', ''])
         result = Document('pdf', raw_hash, json.dumps(config, sort_keys=True), '\n'.join(lines), tuple(blocks),
                           tuple(assets), len(handle), tuple(issues), raw_file, attempts=tuple(attempts))
+        checkpoint()
         return Document.from_dict(attach_table_context(result).to_dict())
 
 
@@ -278,7 +242,8 @@ def raw_path(source):
     path = (root / document.raw_file).resolve()
     if not path.is_relative_to(root) or path.suffix.lower() != '.pdf':
         raise ValueError('PDF 资源路径越界。')
-    if sha256(path.read_bytes()).hexdigest() != document.raw_hash:
+    from source_reader import file_digest
+    if file_digest(path) != document.raw_hash:
         raise ValueError('PDF 原件与当前解析快照不一致。')
     return path
 
@@ -311,3 +276,57 @@ def render_asset(source, asset_id, *, detail=None):
         page = handle[asset.page - 1]
         displayed_rect(page, asset)
         return render_page(page, asset.bbox, detail=detail)
+
+
+def extract_page(page):
+    """Extract one physical page without changing original PDF coordinates."""
+    pdf = pdf_library()
+    issues = []
+    items, table_boxes = [], []
+    try:
+        for table in page.find_tables().tables:
+            rows = table.extract()
+            if rows and len(rows) >= 2:
+                bbox = tuple(table.bbox)
+                table_boxes.append(pdf.Rect(bbox))
+                # External headers are real page text, not an invented first row.
+                if table.header.external and any(table.header.names):
+                    rows.insert(0, table.header.names)
+                if any(value is None for row in rows for value in row):
+                    issues.append({'page': page.number + 1, 'code': 'table_structure_needs_review'})
+                items.append({'kind': 'table', 'text': table_text(rows), 'bbox': bbox,
+                              'table_data': {'rows': rows, 'cells': table.cells,
+                                             'header_names': table.header.names,
+                                             'header_external': table.header.external}})
+    except Exception:
+        issues.append({'page': page.number + 1, 'code': 'table_detection_failed'})
+    for block in page.get_text('dict', sort=True)['blocks']:
+        if block['type'] != 0:
+            continue
+        rect = pdf.Rect(block['bbox'])
+        if any((rect & box).get_area() / max(rect.get_area(), 1) > .65 for box in table_boxes):
+            continue
+        text = '\n'.join(''.join(span['text'] for span in line['spans']) for line in block['lines']).strip()
+        if text:
+            items.append({'kind': 'paragraph', 'text': text, 'bbox': tuple(rect)})
+    regions = [pdf.Rect(info['bbox']) for info in page.get_image_info()]
+    try:
+        regions += [pdf.Rect(box) for box in page.cluster_drawings() if pdf.Rect(box).width >= 60 and pdf.Rect(box).height >= 40]
+    except Exception:
+        pass  # The full page asset always retains vector graphics.
+    figures = []
+    for rect in regions:
+        if rect.is_empty or any((rect & box).get_area() / max(rect.get_area(), 1) > .65 for box in table_boxes + figures):
+            continue
+        figures.append(rect)
+        items.append({'kind': 'figure', 'text': '', 'bbox': tuple(rect)})
+    text = page.get_text()
+    if '\ufffd' in text or text.count('\x00'):
+        issues.append({'page': page.number + 1, 'code': 'garbled_text'})
+    if len(text.strip()) < 20 and figures:
+        issues.append({'page': page.number + 1, 'code': 'visual_content_needs_review'})
+    paragraphs = [i for i in items if i['kind'] == 'paragraph']
+    if any(a['bbox'][2] <= b['bbox'][0] and min(a['bbox'][3], b['bbox'][3]) - max(a['bbox'][1], b['bbox'][1]) > 25
+           for a in paragraphs for b in paragraphs):
+        issues.append({'page': page.number + 1, 'code': 'reading_order_needs_review'})
+    return dict(items=sorted(items, key=lambda i: (i['bbox'][1], i['bbox'][0])), issues=issues)

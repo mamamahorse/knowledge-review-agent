@@ -1,10 +1,11 @@
 """Read known table rows without confusing top-k retrieval with complete coverage."""
 
 from markdown_it import MarkdownIt
+from source_reader import read_lines
 
 
 def table_rows(source, block):
-    text = '\n'.join(source.text.splitlines()[block.line_start - 1:block.line_end])
+    text = read_lines(source,block.line_start,block.line_end)
     tokens = MarkdownIt('commonmark').enable('table').parse(text)
     rows, headers, in_header = [], [], False
     for index, token in enumerate(tokens):

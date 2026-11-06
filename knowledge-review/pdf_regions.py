@@ -36,7 +36,7 @@ def resolve_asset(source, identity):
     document = source.document
     if document is None or document.format != 'pdf' or not isinstance(identity, str):
         raise ValueError('这份资料没有可查看的 PDF 页面。')
-    asset = next((a for a in document.assets if a.asset_id == identity and a.page), None)
+    asset = document.asset(identity) if hasattr(document,'asset') else next((a for a in document.assets if a.asset_id == identity and a.page), None)
     if asset:
         return asset
     if not identity.startswith(PREFIX) or len(identity) > 400:
@@ -54,7 +54,9 @@ def resolve_asset(source, identity):
 
 
 def page_anchor(source, page):
-    block = next((b for b in source.document.blocks
+    document=source.document
+    blocks=document.read_blocks(*document.page(page)) if hasattr(document,'page') else document.blocks
+    block = next((b for b in blocks
                   if b.kind == 'page' and f'page-{page}' in b.asset_ids), None)
     if block is None:
         raise ValueError('视觉资源没有可追溯的页面位置。')
@@ -92,8 +94,10 @@ def select_region(source, identity, bbox=None):
 
 def navigation(source, asset):
     """Only positions and identities: listing an object is not reading its contents."""
+    doc=source.document
+    assets=doc.read_assets(asset.page) if hasattr(doc,'read_assets') else doc.assets
     regions = [dict(asset_id=a.asset_id, kind=a.kind, page=a.page, bbox=a.bbox)
-               for a in source.document.assets if a.page == asset.page and a.bbox]
+               for a in assets if a.page == asset.page and a.bbox]
     return dict(page=asset.page, page_count=source.document.page_count,
                 page_asset_id=f'page-{asset.page}',
                 previous_page=f'page-{asset.page-1}' if asset.page > 1 else None,

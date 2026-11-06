@@ -1,0 +1,9 @@
+# Only application sources and public examples enter the build context.
+**
+!Dockerfile
+!requirements*.txt
+!*.py
+!web/
+!web/**
+!examples/
+!examples/**

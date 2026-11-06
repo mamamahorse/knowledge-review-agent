@@ -7,6 +7,7 @@ __pycache__/
 .data/
 .firecrawl/
 
+
 # Local databases include notes, conversations, answers, and cached vectors.
 *.sqlite
 *.sqlite3
@@ -41,3 +42,6 @@ Thumbs.db
 
 # CLI PDF parse snapshots can contain private source text.
 .parsed/
+
+# docs
+/docs/

@@ -230,10 +230,17 @@ class PDFStorageAndWebTests(unittest.TestCase):
         store = self.client.app.state.practice_store
         with store.transaction() as db:
             row = db.execute('SELECT snapshot_json FROM document_versions WHERE source_id=?', (original['source_id'],)).fetchone()
-        saved = Document.from_dict(json.loads(row[0]))
-        source = source_from_document(next((self.root / 'uploads').glob('*/fixture.pdf')), saved)
+        saved = json.loads(row[0])
+        if saved.get('reader'):
+            from source_reader import open_snapshot,read_lines
+            source=open_snapshot(saved)
+            saved_text=read_lines(source,1,source.line_count)
+        else:
+            saved=Document.from_dict(saved)
+            source = source_from_document(next((self.root / 'uploads').glob('*/fixture.pdf')), saved)
+            saved_text=saved.text
         self.assertTrue(raw_path(source).is_file())
-        self.assertIn('System-0', saved.text)
+        self.assertIn('System-0', saved_text)
         self.assertEqual(self.client.delete(f'/api/documents/{identity}?expected_source_id={current["source_id"]}').status_code, 200)
         self.assertEqual(self.client.get(current['assets'][0]['url']).status_code, 410)
 

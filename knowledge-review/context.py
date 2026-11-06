@@ -2,6 +2,7 @@
 
 from chunking import Chunk, section_label
 from sources import Source
+from source_reader import read_lines, line_count
 import json
 
 
@@ -11,10 +12,9 @@ def validate_chunks(chunks: list[Chunk], sources: list[Source]) -> None:
         source = by_id.get(chunk.source_id)
         if source is None:
             raise ValueError("Retrieved chunk has an unknown source version.")
-        lines = source.text.splitlines()
-        if not 1 <= chunk.line_start <= chunk.line_end <= len(lines):
+        if not 1 <= chunk.line_start <= chunk.line_end <= line_count(source):
             raise ValueError("Retrieved chunk has an invalid source line range.")
-        original = "\n".join(lines[chunk.line_start - 1:chunk.line_end])
+        original = read_lines(source, chunk.line_start, chunk.line_end)
         if chunk.text != original:
             raise ValueError("Retrieved chunk text does not match the source snapshot.")
         if any(not citation_is_visible(chunk.source_id, start, end, chunks) for start, end in chunk.context_ranges):

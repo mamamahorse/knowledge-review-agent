@@ -196,10 +196,14 @@ def attach_table_context(document):
 
 def snapshot_metadata(source):
     """Old Markdown archives remain byte-for-byte compatible; PDFs retain structure."""
-    return {'document': source.document.to_dict()} if source.document and source.document.format == 'pdf' else {}
+    return {'document': source.document.to_dict()} if source.document and (source.document.format == 'pdf' or source.document.assets) else {}
 
 
 def citation_metadata(source, citation):
+    if source.document and source.document.format=='markdown' and citation.asset_id:
+        from markdown_images import resolve
+        asset,_=resolve(source,citation.asset_id)
+        return dict(format='markdown',asset_id=asset.asset_id,evidence_method='vlm_visual_interpretation')
     if source.document is None or source.document.format != 'pdf':
         return {}
     result = {'format': 'pdf', 'locations': source.document.locations(citation.line_start, citation.line_end)}

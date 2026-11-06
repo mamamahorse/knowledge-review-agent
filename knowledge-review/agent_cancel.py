@@ -128,6 +128,9 @@ class CancellableTransport(httpx.BaseTransport):
 
 def model_http_options():
     token = _current.get()
+    from learning_metrics import http_options
+    measured=http_options(token)
+    if measured is not None: return measured
     if token is None:
         return {}
     token.check()

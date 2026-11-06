@@ -10,6 +10,7 @@ from embedding_config import EmbeddingConfig
 from embeddings import LocalEmbedder
 from retrieval import SearchHit, rank_chunks
 from sources import Source
+from source_reader import read_lines, line_count, StoredSource, range_chunks
 from vector_index import get_document_vectors
 from hybrid_retrieval import BM25Index, HybridConfig, reciprocal_rank_fusion
 
@@ -20,7 +21,8 @@ MAX_READ_LINES = 200
 def structure_metadata(source, chunk):
     if source.document is None:
         return {}
-    blocks = [b for b in source.document.blocks if b.line_start <= chunk.line_end and b.line_end >= chunk.line_start]
+    from source_archive import blocks_for
+    blocks = blocks_for(source,chunk.line_start,chunk.line_end)
     if chunk.kind == 'text' and source.document.format != 'pdf':
         return {}
     return {'content_type': chunk.kind, 'parent_blocks': [
@@ -84,6 +86,7 @@ class ToolExecution:
     output: dict
     visible_chunks: tuple[Chunk, ...]
     visual_observation: dict | None = None
+    visual_discovery: dict | None = None
 
 
 class KnowledgeTools:
@@ -94,7 +97,7 @@ class KnowledgeTools:
         max_chars: int = 1200, min_chars: int = 100,
         no_cache: bool = False, rebuild_index: bool = False,
         embedder: LocalEmbedder | None = None, index_path: Path | None = None,
-        retrieval_mode: str = 'dense',
+        retrieval_mode: str = 'dense', reading_range=None,object_db=None,
     ):
         if not sources:
             raise ValueError("Knowledge tools require at least one source.")
@@ -109,9 +112,15 @@ class KnowledgeTools:
         self.no_cache = no_cache
         self.rebuild_index = rebuild_index
         self.index_path = index_path
+        self.reading_range=reading_range
+        self.object_db=object_db
+        self.disk_sources=[s.source_id for s in self.sources
+                                if isinstance(s,StoredSource) and s.version==2 and reading_range is None]
+        self.disk_search=bool(self.disk_sources)
         self.chunks = [
-            chunk for source in self.sources
-            for chunk in chunk_source(source, max_chars, min_chars)
+            chunk for source in self.sources if not self.disk_search
+            for chunk in (range_chunks(source, *(reading_range or (1,line_count(source))), max_chars)
+                          if isinstance(source,StoredSource) else chunk_source(source, max_chars, min_chars))
         ]
         self._embedder = embedder
         self._vectors = None
@@ -134,7 +143,10 @@ class KnowledgeTools:
                  'source_ids':[s.source_id for s in self.sources]}
         start = perf_counter()
         try:
-            result = self._search_notes(query, top_k, trace)
+            if self.disk_search:
+                from archive_retrieval import search
+                result=search(self,query,top_k,trace)
+            else: result = self._search_notes(query, top_k, trace)
             trace.update(status='ok', returned=[{'chunk_id':h.chunk.chunk_id,'source_id':h.chunk.source_id,
                 'line_start':h.chunk.line_start,'line_end':h.chunk.line_end,'score':h.score,
                 **({'branches':result.branches[h.chunk.chunk_id]} if result.branches is not None else {})} for h in result.hits])
@@ -212,12 +224,11 @@ class KnowledgeTools:
         source = next((item for item in self.sources if item.source_id == source_id), None)
         if source is None:
             raise ValueError("read_source can only access a currently loaded source version.")
-        lines = source.text.splitlines()
-        if not 1 <= line_start <= line_end <= len(lines):
+        if not 1 <= line_start <= line_end <= line_count(source):
             raise ValueError("read_source line range is outside the source.")
         if line_end - line_start + 1 > MAX_READ_LINES:
             raise ValueError(f"read_source can return at most {MAX_READ_LINES} lines per call.")
-        text = "\n".join(lines[line_start - 1:line_end])
+        text = read_lines(source,line_start,line_end)
         paths = []
         for chunk in self.chunks:
             if chunk.source_id != source_id or chunk.line_end < line_start or chunk.line_start > line_end:
@@ -240,12 +251,41 @@ class KnowledgeTools:
         if not isinstance(arguments, dict):
             raise ValueError("Tool arguments must be an object.")
         if name == "search_notes":
-            unexpected = set(arguments) - {"query", "top_k"}
+            unexpected = set(arguments) - {"query", "top_k", "scope"}
             if unexpected or "query" not in arguments:
-                raise ValueError("search_notes accepts only query and optional top_k.")
+                raise ValueError("search_notes accepts query and optional top_k/scope.")
+            scope=arguments.get('scope','current')
+            if scope not in ('current','document'): raise ValueError('搜索范围只能是current或document。')
+            if scope=='document' and self.reading_range is not None:
+                expanded=KnowledgeTools(self.sources,self.embedding_config,max_chars=self.max_chars,min_chars=self.min_chars,
+                    no_cache=self.no_cache,rebuild_index=self.rebuild_index,embedder=self.embedder,index_path=self.index_path,
+                    retrieval_mode=self.retrieval_mode,object_db=self.object_db)
+                result=expanded.execute('search_notes',{k:v for k,v in arguments.items() if k!='scope'})
+                self.retrieval_trace.extend(expanded.retrieval_trace)
+                result.output['search_scope']='document'
+                return result
             result = self.search_notes(arguments["query"], arguments.get("top_k", 3))
             chunks = with_table_context([hit.chunk for hit in result.hits], self.sources)
             output = result.as_dict(self.sources)
+            output['search_scope']=scope
+            output['object_notice']='Object search covers available source context and saved descriptions only. No hits do not prove absence. Inspect unreviewed pages/images when visual coverage is needed.'
+            from object_retrieval import search as search_objects
+            object_start=perf_counter()
+            try:
+                diagnostic={}
+                output['object_candidates']=search_objects(self,arguments['query'],arguments.get('top_k',3),diagnostic)
+                output['object_search']=dict(status='ok',**diagnostic)
+            except Exception as exc:
+                from agent_cancel import GenerationCancelled
+                if isinstance(exc,GenerationCancelled): raise
+                output['object_candidates']=[]
+                output['object_search']=dict(status='failed',error_type=type(exc).__name__)
+                output['object_notice']='Object search failed; original-text hits remain valid. No fallback vision requests were issued.'
+            if self.retrieval_trace:
+                trace=self.retrieval_trace[-1]
+                trace['text_total_ms']=trace['total_ms']
+                trace['object_search']={**output['object_search'],'total_ms':(perf_counter()-object_start)*1000}
+                trace['total_ms']=trace['text_total_ms']+trace['object_search']['total_ms']
             if any(c.context_ranges for c in chunks):
                 from context import format_context
                 output['supporting_context'] = format_context(chunks, self.sources)
@@ -285,6 +325,13 @@ class KnowledgeTools:
                       'supporting_context': format_context(chunks[:-1], self.sources),
                       'notice': 'Coverage describes this extracted table only, not proof that PDF extraction is complete. Partial rows cannot establish a global maximum, total or trend.'}
             return ToolExecution(output, tuple(chunks))
+        if name == 'discover_visual':
+            if set(arguments)!={'source_id','asset_id'}: raise ValueError('discover_visual需要source_id和完整页面/图片asset_id。')
+            source=next((s for s in self.sources if s.source_id==arguments['source_id']),None)
+            if source is None: raise ValueError('只能检查本次授权资料。')
+            from visual_discovery import discover
+            result=discover(source,arguments['asset_id'],getattr(self,'discovery_context',None))
+            return ToolExecution(result,(),visual_discovery=result)
         if name == 'inspect_visual':
             required = {'source_id', 'asset_id', 'question'}
             if not required <= set(arguments) or set(arguments) - required - {'bbox', 'include_page'}:
@@ -312,6 +359,7 @@ def knowledge_tool_definitions(*, include_visual=False, include_tables=False) ->
                 "type": "object", "additionalProperties": False,
                 "properties": {
                     "query": {"type": "string", "description": "A focused semantic search query."},
+                    "scope": {"type":"string","enum":["current","document"],"description":"Default current batch/range. document explicitly searches all currently authorized source snapshots for supplementary context; never expands source permissions."},
                     "top_k": {"type": "integer", "minimum": 1, "maximum": MAX_SEARCH_RESULTS, "default": 3},
                 },
                 "required": ["query"],
@@ -340,8 +388,10 @@ def knowledge_tool_definitions(*, include_visual=False, include_tables=False) ->
                                'row_end': {'type': 'integer', 'minimum': 1}},
                 'required': ['source_id', 'block_id', 'row_start', 'row_end']}})
     if include_visual:
+        definitions.append(dict(name='discover_visual',description='Inspect a whole PDF page or imported Markdown image to discover charts, formulas, icons and parser omissions. Returns navigation only, never citation evidence. Reinspect with prior reading observations when details remain unclear.',
+            parameters=dict(type='object',additionalProperties=False,properties=dict(source_id=dict(type='string'),asset_id=dict(type='string')),required=['source_id','asset_id'])))
         definitions.append({'name': 'inspect_visual',
-            'description': 'Read a PDF page (page-N), known region or returned crop ID. Choose direct region reading, page overview, zoom or another page according to the missing evidence; no fixed order. bbox optionally selects a new crop relative to the chosen image. include_page optionally adds its full page. Navigation and suggested regions are not viewed evidence. Table-wide numeric claims need complete data.',
+            'description': 'Read a PDF page (page-N), region, imported Markdown image or returned crop ID. Choose direct region reading, page overview, zoom or another page according to the missing evidence; no fixed order. bbox optionally selects a new crop relative to the chosen image. include_page optionally adds its full page. Navigation and suggested regions are not viewed evidence. Table-wide numeric claims need complete data.',
             'parameters': {'type': 'object', 'additionalProperties': False,
                 'properties': {'source_id': {'type': 'string'}, 'asset_id': {'type': 'string'},
                                'question': {'type': 'string', 'maxLength': 2000},

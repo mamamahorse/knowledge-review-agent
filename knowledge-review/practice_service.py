@@ -8,7 +8,7 @@ from chunking import Chunk, chunk_source, with_table_context
 from embedding_config import select_embedding_config
 from knowledge_tools import KnowledgeTools
 from agent_loop import document_focus
-from practice_model import generate_question, grade_answer, question_messages, LearningQuestionDraft
+from practice_model import generate_question, grade_answer, question_messages, LearningQuestionDraft, visual_receipts
 from generation_budget import GenerationBudget, BudgetError, fit_chunks
 from structured_output import structured_protocols
 from library_store import LibraryStore
@@ -16,7 +16,7 @@ from practice_store import (
     MAX_QUESTIONS_PER_SESSION, PracticeStore, archived_sources, public_session,
 )
 from sources import Source
-from document_model import snapshot_metadata
+from source_reader import read_lines, line_count, snapshot as source_snapshot, StoredSource
 from response_preferences import ResponseLanguage, validate_language
 
 
@@ -32,7 +32,9 @@ def start_practice(
     if (start is None) != (end is None):
         raise ValueError("选段起止行需同时提供或同时省略。")
     if whole_scope:
-        start, end = 1, len(focus_source.text.splitlines())
+        if any(isinstance(s,StoredSource) for s in sources):
+            raise ValueError('按页存档资料请先生成自主学习清单并选目标出题，或选择原文范围练习。')
+        start, end = 1, line_count(focus_source)
     fallback_goal = (f"理解 {focus_source.path.name} 的 L{start}–L{end} 所选内容"
                      if response_language == "zh" else
                      f"Understand the selected content in {focus_source.path.name}, L{start}–L{end}")
@@ -83,8 +85,7 @@ def start_practice(
     visible_source_ids = {chunk.source_id for chunk in visible}
     snapshots = [{
         "document_id": document_ids_by_source[source.source_id],
-        "source_id": source.source_id,
-        "path": str(source.path), "name": source.path.name, "text": source.text, **snapshot_metadata(source),
+        **source_snapshot(source), "name": source.path.name,
     } for source in sources if source.source_id in visible_source_ids]
     ranges = [{"source_id": chunk.source_id, "line_start": chunk.line_start,
                "line_end": chunk.line_end} for chunk in visible]
@@ -100,7 +101,7 @@ def _visible_chunks(record: dict, sources: list[Source]) -> list[Chunk]:
     for item in record["visible_ranges"]:
         source = by_id[item["source_id"]]
         start, end = item["line_start"], item["line_end"]
-        text = "\n".join(source.text.splitlines()[start - 1:end])
+        text = read_lines(source,start,end)
         identity = f"{source.source_id}:archived:{start}:{end}"
         chunks.append(Chunk(sha256(identity.encode()).hexdigest(), source.source_id,
                             (), start, end, text))
@@ -132,6 +133,7 @@ def grade_pending_answer(
         question["draft"], question["answer_text"], sources, visible,
         can_follow_up=can_follow_up,
         response_language=record["response_language"],
+        **({'visual_evidence':visual_receipts(record)} if visual_receipts(record) else {}),
         learning_context={"target": question["target"] or (question["draft"].learning.target.model_dump() if question["draft"].learning else None),
                           "assistance": question["assistance"], "recent_performance": item["history"] if item else [],
                           "other_capability_evidence": item["related_history"] if item else []},

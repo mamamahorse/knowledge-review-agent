@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:8767:8767"
+    volumes:
+      - knowledge-data:/app/.data
+      - knowledge-models:/app/.models
+    restart: unless-stopped
+
+volumes:
+  knowledge-data:
+  knowledge-models:

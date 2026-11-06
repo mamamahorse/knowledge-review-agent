@@ -49,7 +49,8 @@ def load_sources(paths: list[Path]) -> list[Source]:
         else:
             text = read_note(path)
             source_id = sha256((str(path) + "\0" + text).encode("utf-8")).hexdigest()
-            sources.append(Source(source_id, path, text))
+            from markdown_images import bind_source
+            sources.append(bind_source(path,text,source_id))
         seen.add(path)
     return sources
 

@@ -12,6 +12,7 @@ from pydantic import Field
 
 from answers import Citation, StrictModel
 from chunking import Chunk
+from source_reader import read_lines
 from context import citation_is_visible, format_context
 from generation_budget import BudgetError, GenerationBudget, fit_chunks
 from learning_types import LearningDraft, KnowledgeDraft, TargetDraft, CRITERIA_GUIDANCE
@@ -95,7 +96,7 @@ def section_manifest(sources, snapshots):
 
 def excerpt(source, start, end, path=(), lines=None):
     return Chunk(sha256(f'{source.source_id}:{start}:{end}'.encode()).hexdigest(), source.source_id,
-                 tuple(path), start, end, '\n'.join((lines if lines is not None else source.text.splitlines())[start - 1:end]))
+                 tuple(path), start, end, '\n'.join(lines[start - 1:end]) if lines is not None else read_lines(source,start,end))
 
 
 def outline_messages(source, section, chunk, objective, language):

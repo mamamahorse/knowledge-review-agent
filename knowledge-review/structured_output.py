@@ -9,6 +9,7 @@ from openai.lib._parsing._completions import type_to_response_format_param
 
 from generation_budget import GenerationBudget, BudgetError
 from structured_recovery import RecoveryTrace, MAX_RETRIES, current_validator, current_guard, error_details
+from thinking_config import thinking_options
 
 Result = TypeVar("Result", bound=BaseModel)
 RESULT_TOOL = "submit_result"
@@ -96,6 +97,9 @@ def _request_once(client, model, messages, schema, *, budget=None, before_reques
         return request_streamed(client, model, messages, schema, budget, before_request, on_delta,
                                 trace=trace, protocol_policy=protocol_policy)
     provider = (str(client.base_url), model)
+    _, thinking = thinking_options(client)
+    if thinking:
+        trace.tool_mode = 'auto'
     if protocol_policy == 'forced_tools':
         return request_tool_result(client, model, messages, schema, provider, budget,
                                    before_request, telemetry, trace=trace, forced_only=True)
@@ -108,7 +112,7 @@ def _request_once(client, model, messages, schema, *, budget=None, before_reques
             # Same SDK-expanded schema on the wire; retain the raw content before local parsing.
             response = client.chat.completions.create(
                 model=model, messages=messages, response_format=type_to_response_format_param(schema),
-                max_tokens=budget.output_tokens,
+                max_tokens=budget.output_tokens, **thinking_options(client)[0],
             )
         except APIError as exc:
             if not response_format_is_unavailable(exc):
@@ -139,12 +143,16 @@ def request_streamed(client, model, messages, schema, budget, before_request, on
         if before_request:
             before_request()
         budget.check(messages, model=model, max_tokens=budget.output_tokens, **protocol)
-        def observe(text, finished):
+        def observe(text, finished, reasoning, call_id, name):
             trace.original=text
             trace.assistant=dict(role='assistant',content=text)
             trace.write('stream_response', original=text, finish_reason=finished)
+            if call_id and name:
+                trace.assistant = dict(role='assistant', content=None, tool_calls=[dict(id=call_id, type='function', function=dict(name=name, arguments=text))])
+            if reasoning:
+                trace.assistant['reasoning_content'] = reasoning
         return collect_answer(client, {'model': model, 'messages': messages,
-                                      'max_tokens': budget.output_tokens, **protocol},
+                                      'max_tokens': budget.output_tokens, **protocol, **thinking_options(client)[0]},
                               schema, emit, tools='tools' in protocol, decoder=trace.decode, observer=observe)
 
     if protocol_policy != 'forced_tools' and provider not in FUNCTION_OUTPUT_PROVIDERS and not getattr(trace, 'tool_mode', None):
@@ -153,7 +161,7 @@ def request_streamed(client, model, messages, schema, budget, before_request, on
         except APIError as exc:
             if emitted or not response_format_is_unavailable(exc):
                 raise
-    mode = 'forced' if protocol_policy == 'forced_tools' else getattr(trace,'tool_mode',None) or FUNCTION_OUTPUT_PROVIDERS.get(provider, 'forced')
+    mode = 'auto' if thinking_options(client)[1] else 'forced' if protocol_policy == 'forced_tools' else getattr(trace,'tool_mode',None) or FUNCTION_OUTPUT_PROVIDERS.get(provider, 'forced')
     choice = 'auto' if mode == 'auto' else {'type': 'function', 'function': {'name': RESULT_TOOL}}
     trace.tool_mode=mode
     try:
@@ -176,7 +184,7 @@ def request_tool_result(client, model, messages, schema, provider, budget, befor
     # This is a result submission, not an executable or state-writing tool.
     # Compatible providers may not enforce strict schemas; validate locally too.
     tools = result_tools(schema)
-    mode = 'forced' if forced_only else getattr(trace,'tool_mode',None) or FUNCTION_OUTPUT_PROVIDERS.get(provider, "forced")
+    mode = 'auto' if thinking_options(client)[1] else 'forced' if forced_only else getattr(trace,'tool_mode',None) or FUNCTION_OUTPUT_PROVIDERS.get(provider, "forced")
     trace.tool_mode=mode
     choice = "auto" if mode == "auto" else {"type": "function", "function": {"name": RESULT_TOOL}}
     try:
@@ -185,7 +193,7 @@ def request_tool_result(client, model, messages, schema, provider, budget, befor
         budget.check(messages, model=model, max_tokens=budget.output_tokens, tools=tools, tool_choice=choice)
         response = client.chat.completions.create(
             model=model, messages=messages, tools=tools, tool_choice=choice,
-            max_tokens=budget.output_tokens,
+            max_tokens=budget.output_tokens, **thinking_options(client)[0],
         )
     except APIError as exc:
         error = str(exc).lower()
@@ -202,7 +210,7 @@ def request_tool_result(client, model, messages, schema, provider, budget, befor
         budget.check(messages, model=model, max_tokens=budget.output_tokens, tools=tools, tool_choice="auto")
         response = client.chat.completions.create(
             model=model, messages=messages, tools=tools, tool_choice="auto",
-            max_tokens=budget.output_tokens,
+            max_tokens=budget.output_tokens, **thinking_options(client)[0],
         )
     if telemetry is not None:
         telemetry(response, 'tool_' + mode)

@@ -154,10 +154,14 @@ class LibraryStore:
             row = db.execute('SELECT * FROM document_states WHERE document_id=?', (identity,)).fetchone()
             if row['removed'] or row['revision'] != expected_revision:
                 raise ValueError('资料已被其他请求修改，请刷新。')
-            snapshot = old_source.document.to_dict() if old_source.document and old_source.document.format == 'pdf' else None
+            from source_reader import StoredSource, snapshot as source_snapshot
+            snapshot = (source_snapshot(old_source) if isinstance(old_source,StoredSource) else
+                        old_source.document.to_dict() if old_source.document and old_source.document.format == 'pdf' else None)
             db.execute('INSERT OR IGNORE INTO document_versions(document_id,source_id,text,snapshot_json) VALUES (?,?,?,?)',
-                       (identity, old_source.source_id, old_source.text, json.dumps(snapshot, ensure_ascii=False) if snapshot else None))
+                       (identity, old_source.source_id, '' if isinstance(old_source,StoredSource) else old_source.text,
+                        json.dumps(snapshot, ensure_ascii=False) if snapshot else None))
             db.execute('UPDATE document_states SET revision=revision+1,removed=?,text_override=?,source_json=? WHERE document_id=?',
                        (int(remove), None if remove else text,
-                        json.dumps(document.to_dict(), ensure_ascii=False) if document is not None and not remove else None, identity))
+                        json.dumps(source_snapshot(document) if isinstance(document,StoredSource) else document.to_dict(),
+                                   ensure_ascii=False) if document is not None and not remove else None, identity))
         return {'id': identity, 'removed': remove}

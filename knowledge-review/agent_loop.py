@@ -15,8 +15,10 @@ from knowledge_tools import KnowledgeTools, MAX_READ_LINES, knowledge_tool_defin
 from model_client import answer_question, model_settings
 from response_preferences import ResponseLanguage, preference_messages
 from sources import Source
+from source_reader import read_lines, line_count
 from generation_budget import GenerationBudget, fit_chunks
 from conversation_memory import memory_tool_definitions, fit_memory
+from tool_execution import parse_arguments, validate_arguments, ToolArgumentsError, tool_error
 
 if TYPE_CHECKING:
     from conversation_context import ContextBundle
@@ -60,7 +62,7 @@ def focus_on_lines(
     selected = tools.read_source(source_id, line_start, line_end)
     if type(context_lines) is not int or context_lines < 0:
         raise ValueError("Focus context_lines must be a nonnegative integer.")
-    total = len(selected.source.text.splitlines())
+    total = line_count(selected.source)
     room = MAX_READ_LINES - (line_end - line_start + 1)
     before = min(context_lines, line_start - 1, room // 2)
     after = min(context_lines, total - line_end, room - before)
@@ -71,13 +73,13 @@ def focus_on_lines(
 
 def document_focus(source: Source, line_start: int, line_end: int) -> FocusSelection:
     """An explicit web selection is separate from the Agent's bounded read tool."""
-    lines = source.text.splitlines()
-    if not 1 <= line_start <= line_end <= len(lines):
+    total=line_count(source)
+    if not 1 <= line_start <= line_end <= total:
         raise ValueError("The selected lines are outside the current document.")
-    start, end = max(1, line_start - 5), min(len(lines), line_end + 5)
+    start, end = max(1, line_start - 5), min(total, line_end + 5)
     identity = f"{source.source_id}:web-focus-v1:{start}:{end}"
     chunk = Chunk(sha256(identity.encode()).hexdigest(), source.source_id, (),
-                  start, end, "\n".join(lines[start - 1:end]))
+                  start, end, read_lines(source,start,end))
     protected = protect_selection(chunk, source)
     return FocusSelection(protected[-1], line_start, line_end, tuple(protected[:-1]))
 
@@ -121,9 +123,11 @@ def run_agent(
             conversation_context = memory_tools.bind(conversation_context)
     background = conversation_context.prompt() if conversation_context else ""
     catalog = "\n".join(
-        f"- {source.path.name} | source_id={source.source_id} | {len(source.text.splitlines())} lines" + (
+        f"- {source.path.name} | source_id={source.source_id} | {line_count(source)} lines" + (
             f" | PDF {source.document.page_count} physical pages; page assets: page-1 through page-{source.document.page_count}; parsing status={source.document.status}"
-            if source.document and source.document.format == 'pdf' else '')
+            if source.document and source.document.format == 'pdf' else '') + (
+            ' | Whole-document text search available; index is built page by page on demand. Catalog is not read evidence.'
+            if source.source_id in getattr(tools,'disk_sources',()) else '')
         for source in sources
     )
     messages = [
@@ -145,7 +149,11 @@ def run_agent(
         {"role": "user", "content": f"Question: {question}\n\nLoaded sources:\n{catalog}{focus_prompt}{background}"},
     ] + preferences
     from pdf_vision import enabled as vision_enabled, vision_status
-    include_visual = any(s.document and s.document.format == 'pdf' for s in sources) and vision_enabled()
+    include_visual = any(s.document and (s.document.format == 'pdf' or s.document.assets) for s in sources) and vision_enabled()
+    for source in sources:
+        if source.document and source.document.format=='markdown':
+            messages[1]['content']+='\nMarkdown image navigation (not viewed evidence): '+json.dumps([
+                dict(asset_id=a.asset_id,kind=a.kind) for a in source.document.assets])
     include_tables = any(s.document and any(b.kind == 'table' for b in s.document.blocks) for s in sources)
     if any(s.document and s.document.format == 'pdf' for s in sources):
         status = vision_status()
@@ -184,9 +192,10 @@ def run_agent(
                 budget_trace.append({"phase": "agent", **budget.check(messages, **protocol)})
                 if event_sink is not None:
                     event_sink("progress", {"phase": "agent_model", "status": "started"})
+                from thinking_config import thinking_options
                 response = client.chat.completions.create(
                     model=model, messages=messages, tools=definitions, tool_choice="auto",
-                    max_tokens=budget.output_tokens,
+                    max_tokens=budget.output_tokens, **thinking_options(client)[0],
                 )
                 if not response.choices:
                     raise RuntimeError("the model returned no agent choices.")
@@ -217,6 +226,9 @@ def run_agent(
                     "role": "assistant", "content": choice.message.content,
                     "tool_calls": [call.model_dump(exclude_none=True) for call in calls],
                 })
+                reasoning = getattr(choice.message, 'reasoning_content', None)
+                if reasoning is not None:
+                    messages[-1]['reasoning_content'] = reasoning
                 for call in calls:
                     checkpoint()
                     arguments = None
@@ -229,7 +241,10 @@ def run_agent(
                             raise ValueError("Tool-call budget exhausted.")
                         if call.type != "function":
                             raise ValueError("Only function tools are supported.")
-                        arguments = json.loads(call.function.arguments)
+                        arguments = parse_arguments(call.function.arguments)
+                        definition=next((d['function'] for d in definitions if d['function']['name']==call.function.name),None)
+                        if definition is not None:
+                            validate_arguments(arguments,definition['parameters'])
                         def tool_message(value):
                             return {"role": "tool", "tool_call_id": call.id,
                                     "content": json.dumps(value, ensure_ascii=False)}
@@ -266,7 +281,11 @@ def run_agent(
                         error = None
                     except (ValueError, TypeError) as exc:
                         error = str(exc)
+                        # Keep the established chat error string while exposing the same
+                        # field-level contract used by the learning state machine.
                         output = {"error": error}
+                        if isinstance(exc,ToolArgumentsError):
+                            output.update(ok=False,tool_error=tool_error('INVALID_ARGUMENTS',exc.issues,error))
                     if event_sink is not None:
                         event_sink("progress", {"phase": "tool", "tool": call.function.name,
                                                 "status": "failed" if error else "completed"})

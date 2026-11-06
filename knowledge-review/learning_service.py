@@ -12,6 +12,7 @@ from practice_service import _visible_chunks
 from practice_store import archived_sources, public_session
 from response_preferences import preference_messages, validate_language
 from answers import StrictModel
+from practice_model import visual_receipts, visual_messages
 
 
 class EnrollmentDraft(StrictModel):
@@ -50,13 +51,13 @@ def enroll_question(store, session_id, question_id, *, unit_id=None, response_la
             "Describe the reusable knowledge and observable learning target assessed by this existing exercise. "
             "Use the saved source material and scope. This task identifies the target, without reassessing an answer."},
             {"role": "user", "content": json.dumps({"question": draft.model_dump(),
-                "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language)
+                "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language) + visual_messages(visual_receipts(record))
         extracted = _request_structured(messages, EnrollmentDraft)
         learning = extracted.learning
         checked = draft.model_copy(update={"learning": learning, "criterion_indices": extracted.criterion_indices})
     else:
         checked = draft
-    validate_question(checked, sources, visible)
+    validate_question(checked, sources, visible, visual_evidence=visual_receipts(record))
     return store.enroll(session_id, question_id, learning, unit_id=unit_id, criterion_indices=checked.criterion_indices,
                         collection_id=collection_id)
 
@@ -88,13 +89,13 @@ def start_review(store, item_id, *, mode="variant", response_language="zh"):
             {"role": "user", "content": json.dumps({"knowledge": item["knowledge"], "target": item["target"],
                 "original_question": item["original"], "recent_performance": item["history"],
                 "other_capability_evidence": item["related_history"],
-                "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language)
+                "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language) + visual_messages(visual_receipts(record))
         if record.get('basis'):
             from chat_practice import live_basis
             messages.append({'role': 'user', 'content': json.dumps({'discussion_angles': live_basis(store, record)}, ensure_ascii=False)})
         draft = _request_structured(messages, VariantDraft,
             **({'before_request': lambda: store.assert_basis(record['id'])} if record.get('basis') else {})).model_copy(update={"learning": learning})
-    validate_question(draft, sources, visible)
+    validate_question(draft, sources, visible, visual_evidence=visual_receipts(record))
     session_id = store.create(item["target"]["title"], record["focus_source_id"], record["focus_start"], record["focus_end"],
         record["snapshots"], record["visible_ranges"], draft, response_language=response_language,
         review_item_id=item_id, review_mode=mode, target_id=item["target_id"],
@@ -120,7 +121,7 @@ def add_dimension(store, item_id, capability, *, response_language="zh"):
         "Design an exercise assessing the requested capability for this saved knowledge unit. "
         "Describe a concrete observable target and source-grounded reference criteria. Learning routes remain suggestions."},
         {"role": "user", "content": json.dumps({"knowledge": item["knowledge"], "requested_capability": capability,
-            "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language)
+            "sources": format_context(visible, sources)}, ensure_ascii=False)}] + preference_messages(response_language) + visual_messages(visual_receipts(record))
     if record.get('basis'):
         from chat_practice import live_basis
         messages.append({'role': 'user', 'content': json.dumps({'discussion_angles': live_basis(store, record)}, ensure_ascii=False)})
@@ -130,7 +131,7 @@ def add_dimension(store, item_id, capability, *, response_language="zh"):
         raise ValueError("生成的能力维度与选择不一致，请重试。")
     draft = draft.model_copy(update={"learning": draft.learning.model_copy(update={"knowledge": LearningDraft.model_validate(
         {"knowledge": item["knowledge"], "target": item["target"]}).knowledge})})
-    validate_question(draft, sources, visible)
+    validate_question(draft, sources, visible, visual_evidence=visual_receipts(record))
     checkpoint()
     session_id = store.create(draft.objective, record["focus_source_id"], record["focus_start"], record["focus_end"],
         record["snapshots"], record["visible_ranges"], draft, response_language=response_language,
@@ -148,6 +149,6 @@ def correct_grade(store, session_id, question_id, updates, reason, expected_revi
     from practice_model import GradeDraft
     grade = parse_grade({**question["grade"].model_dump(), **updates, "rating_reason": reason})
     validate_grade(grade, question["draft"], question["answer_text"], sources, visible,
-                   can_follow_up=question["position"] < 3)
+                   can_follow_up=question["position"] < 3, visual_evidence=visual_receipts(record))
     store.revise_grade(session_id, question_id, grade, reason, expected_revision)
     return public_session(store.get(session_id))

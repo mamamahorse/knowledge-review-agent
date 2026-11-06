@@ -106,10 +106,19 @@ class SuggestedRegion(BaseModel):
         return self
 
 
+class FormulaReading(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    latex: str
+    variables: list[str]
+    conditions: list[str]
+    unreadable: list[str]
+
+
 class VisualReading(BaseModel):
     model_config = ConfigDict(extra='forbid')
     observation: str = Field(min_length=1, max_length=6000)
     limitations: str = Field(max_length=2000)
+    formulas: list[FormulaReading] = Field(default_factory=list,description='When formulas are relevant, preserve transcription, variable definitions, conditions and explicitly unreadable symbols. Never guess missing subscripts, signs or bounds; valid LaTeX is not proof of correctness.')
     suggested_regions: list[SuggestedRegion] = Field(default_factory=list,
         description='Optional regions worth reading more closely in the target image; these are navigation, not verified evidence.')
     next_read: str = Field(default='', max_length=2000,
@@ -198,6 +207,9 @@ def inspect_visual(source, asset_id, question, *, bbox=None, include_page=False)
         raise ValueError('查看图片需要 1 至 2000 字符的问题。')
     if type(include_page) is not bool:
         raise ValueError('include_page 必须为布尔值。')
+    if source.document and source.document.format=='markdown':
+        from markdown_images import inspect
+        return inspect(source,asset_id,question,bbox=bbox,include_page=include_page)
     from pdf_regions import select_region, page_anchor, navigation
     asset = select_region(source, asset_id, bbox)
     block = page_anchor(source, asset.page)
@@ -243,6 +255,7 @@ def inspect_visual(source, asset_id, question, *, bbox=None, include_page=False)
     return {'source_id': source.source_id, 'asset_id': asset.asset_id, 'page': asset.page,
             'line_start': block.line_start, 'line_end': block.line_end,
             'observation': reading.observation, 'limitations': reading.limitations,
+            'formulas':[f.model_dump() for f in reading.formulas],
             'viewed_assets': viewed, 'navigation': nav, 'suggested_regions': suggestions,
             'next_read': reading.next_read,
             'method': 'vlm_visual_interpretation'}, block

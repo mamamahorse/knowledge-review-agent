@@ -148,6 +148,28 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(len(requests), 2)
         self.assertNotIn("HIDDEN", requests[1]["messages"][1]["content"])
 
+    def test_missing_parameter_uses_shared_field_error_in_chat(self):
+        requests=[]
+        def respond(request):
+            body=json.loads(request.content); requests.append(body)
+            if len(requests)==1:
+                return self.completion(dict(role='assistant',content=None,tool_calls=[
+                    self.call('bad','read_source',dict(line_start=3,line_end=3))]),'tool_calls')
+            if len(requests)==2:
+                result=json.loads(body['messages'][-1]['content'])
+                self.assertEqual(result['tool_error']['code'],'INVALID_ARGUMENTS')
+                self.assertEqual(result['tool_error']['issues'][0]['path'],['source_id'])
+                self.assertEqual(body['messages'][-1]['tool_call_id'],'bad')
+                return self.completion(dict(role='assistant',content=None,tool_calls=[
+                    self.call('good','read_source',dict(source_id='doc-a',line_start=3,line_end=3))]),'tool_calls')
+            if len(requests)==3: return self.completion(dict(role='assistant',content='READY'))
+            return self.completion(dict(role='assistant',content=json.dumps(dict(coverage='sufficient',coverage_note='',
+                blocks=[dict(kind='grounded',text='Visible fact.',citations=[dict(source_id='doc-a',line_start=3,line_end=3)])]))))
+        result=self.run_script(respond)
+        self.assertIsNotNone(result.steps[0].error)
+        self.assertIsNone(result.steps[1].error)
+        self.assertEqual(len(result.visible_chunks),1)
+
     def test_no_tool_call_allows_strict_insufficient_answer(self):
         def respond(request):
             body = json.loads(request.content)

@@ -50,6 +50,18 @@ def current_validator():
     return _validator.get()
 
 
+@contextmanager
+def audit_observer(observer):
+    """Add sanitized telemetry without changing existing raw audit storage."""
+    directory,previous=_audit.get()
+    def notify(value):
+        if previous: previous(value)
+        observer(value)
+    token=_audit.set((directory,notify))
+    try: yield
+    finally: _audit.reset(token)
+
+
 def current_guard():
     return _guard.get()
 
@@ -122,12 +134,15 @@ class RecoveryTrace:
         """Only public answer/tool arguments; never headers, reasoning_content or prompts."""
         calls = getattr(message, 'tool_calls', None) or []
         self.assistant = dict(role='assistant', content=getattr(message, 'content', None))
+        reasoning = getattr(message, 'reasoning_content', None)
         if calls:
             self.assistant['tool_calls'] = [dict(id=c.id, type=c.type,
                 function=dict(name=c.function.name, arguments=c.function.arguments)) for c in calls]
         self.original = calls[0].function.arguments if len(calls)==1 else getattr(message,'content',None)
         self.write('response', response_id=response_id, protocol=protocol, finish_reason=finish_reason,
                    original_return=self.assistant)
+        if reasoning is not None:
+            self.assistant['reasoning_content'] = reasoning
 
     def decode(self, text):
         self.original = text

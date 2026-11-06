@@ -10,6 +10,7 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 from conversation_store import fingerprint
+from source_reader import line_count
 from generation_budget import BudgetError, GenerationBudget
 from model_client import model_settings
 from structured_output import request_structured, structured_protocols
@@ -43,7 +44,7 @@ class ContextBundle:
 
     def bind(self, sources, focus):
         return replace(self, materials=tuple({"source_id": s.source_id, "name": s.path.name,
-                                              "line_count": len(s.text.splitlines())} for s in sources),
+                                              "line_count": line_count(s)} for s in sources),
                        selection=({"source_id": focus.chunk.source_id, "line_start": focus.line_start,
                                    "line_end": focus.line_end,
                                    "visible_lines": [focus.chunk.line_start, focus.chunk.line_end]} if focus else None))

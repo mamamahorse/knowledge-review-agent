@@ -4,6 +4,7 @@ from hashlib import sha256
 import json
 
 from answers import Citation
+from source_reader import read_lines
 from context import validate_chunks, citation_is_visible
 
 EVIDENCE_PROTOCOL = 'extraction-evidence-ids-v1'
@@ -53,18 +54,19 @@ def extraction_evidence(source, visible):
     separate across gaps, and split windows clip the same block to their own rights.
     """
     validate_chunks(visible, [source])
-    blocks = source.document.blocks if source.document else ()
-    lines = source.text.splitlines()
+    from source_archive import blocks_for
+
     citations = []
     for chunk in visible:
+        blocks=blocks_for(source,chunk.line_start,chunk.line_end)
         pieces = [(max(chunk.line_start,b.line_start), min(chunk.line_end,b.line_end))
                   for b in blocks if b.line_start <= chunk.line_end and b.line_end >= chunk.line_start]
         # Preserve nonblank parser gaps as real text too, rather than silently
         # dropping evidence outside a parser's structural blocks.
         for start, end in missing_ranges(chunk.line_start, chunk.line_end, pieces):
             run = None
-            for number in range(start, end+1):
-                if lines[number-1].strip():
+            for number,text in enumerate(read_lines(source,start,end).splitlines(),start):
+                if text.strip():
                     if run is None: run = number
                 elif run is not None:
                     pieces.append((run,number-1)); run = None

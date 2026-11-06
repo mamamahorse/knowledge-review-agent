@@ -91,7 +91,8 @@ def validate_answer(
                     if b.line_start <= citation.line_end and b.line_end >= citation.line_start]
                 if not any(b.kind not in ('page', 'figure') for b in evidence_blocks):
                     raise RuntimeError('image navigation labels are not textual evidence; view the visual asset first.')
-            if not 1 <= citation.line_start <= citation.line_end <= len(source.text.splitlines()):
+            from source_reader import line_count
+            if not 1 <= citation.line_start <= citation.line_end <= line_count(source):
                 raise RuntimeError("the model cited an invalid line range.")
             if chunks is not None and not citation_is_visible(
                 citation.source_id, citation.line_start, citation.line_end, chunks,

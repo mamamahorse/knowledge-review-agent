@@ -1,5 +1,33 @@
 # Knowledge Review 开发约定
 
+2026-11-06纠错修复：tool_execution.py抽出通用参数解析/校验、错误结构和ToolRecovery，普通聊天与学习均复用参数合同；保留各自状态机。学习阶段切换清空correction/transport，原事件不删；同批错误汇总，成功兄弟不清失败；网络独立两次重试，仅完整模型响应消耗模型纠错机会，所有HTTP仍受总额度。新增9项针对性检查及协议/Agent/遥测检查通过，无真实请求/Git交付/服务重启。见docs/learning-runtime-protocol.md。
+
+
+2026-11-06阅读协议：learning_runtime.py接自主学习原生工具/auto和finish_reading→结构化产物分阶段；产物移除read/tool/arguments_json，need_more_evidence仅重开阅读。Schema字段错误回传tool_call_id，最多两次纠正；未知工具整组拒绝、越权暂停，计数恢复不清零。原证据/预算/父批额度/版本/attempt/取消保护保持，资源限额不当成普通工具错误。Thinking默认enabled/high可配置，推理在内存工具链回传，不写任务或结构化审计。9项SDK受控协议检查、相关业务与旧规划检查通过；无新真实请求、Git交付或重启。见docs/learning-runtime-protocol.md。
+
+
+2026-11-06遥测与验收：learning_metrics.py按实际HTTP尝试保存主/视觉请求、usage未知项、结构化失败与累计执行时间，网页任务详情已接；calls_reserved仍仅为预留额度。父子不重复计数，旧消费不反推，价格默认unknown。learning_acceptance.py默认准备，--run才发真实请求，隔离资料/数据库及进程内thinking关闭＋强制提交。14项定向检查通过；一次真实deepseek-flash请求HTTP200，但返回read_source/discover_visual顶层调用而非submit_result，规划失败停止，未生成目标/题目或执行VLM。2892输入/218输出Token、reasoning未知、累计2.675秒、峰值价格估算US$0.0011292。补强提交提示仅经离线检查，未真实复测；原失败产物不覆盖。见docs/learning-metrics.md与docs/learning-acceptance-20261106.md。未改个人配置/Gold/默认算法、未重启或操作已有Git暂存区。
+
+2026-11-06：object_retrieval.py接对象候选，免费结构上下文＋自主学习任务已发布的视觉发现/观察进入独立检索；描述与原任务同事务保存，source_id隔离，临时磁盘表示＋原Dense/BM25/RRF排名。search_notes返回object_candidates，不进visible_chunks/证据ID；支持scope=document显式辅助搜索，默认当前范围，局部对象失败保留正文结果。4项新增和相关18项受控检查通过，另验证原知识工具，无真实质量/浏览器/模型调用、无Git交付或重启。普通聊天视觉结果尚不持久共享、无独立补全按钮，旧全文入口适配仍后续。见docs/object-retrieval.md。
+
+2026-11-05检索增量：archive_retrieval.py接新v2快照整份文字检索，按页/16片段准备并落盘，逐条余弦、有界候选、SQL BM25与原RRF；模型/来源/算法参数隔离范围，ready前不查partial，缓存可恢复，no_cache用临时磁盘库。KnowledgeTools/Agent入口已接，不再宣称新PDF整份检索未就绪。4项新增与相关12项定向检查通过，无真实模型/浏览器/性能或召回数值。对象表示索引、旧全文清单入口适配仍未完成。见docs/archive-retrieval.md。
+
+2026-11-05后续：visual_discovery.py增加可选视觉覆盖模式，网页visual_coverage/CLI--visual-coverage默认关闭；整页/整图发现不受解析候选限制，发现输出不授予证据资格。页面/图片状态与对象read/excluded/unresolved独立记录，规划和正式阶段complete校验未完成项；read需要实际区域回执。公式可选结构字段保留不确定符号，不能称数学验证。与主任务共用额度/attempt/版本，恢复保留检查范围，父任务同页可复用发现但不继承证据权限。4项受控新增检查及相关检查通过，无真实模型/浏览器/全量或检索收益结论，索引仍未实现。见docs/visual-discovery.md。
+
+2026-11-05第二批：markdown_images.py接Markdown随文上传及CLI--images-dir，Pillow静态图检查、内容哈希冻结、统一inspect_visual与来源绑定裁剪；sources按资源清单绑定版本。图片作为独立账本单元，page=None不互相覆盖，局部不算整图；排除/未解决需明确回执。题目及反馈复用原视觉回执/快照契约。4项新增与相关共14项受控检查通过，无真实模型/浏览器、Git交付或重启。无外链自动下载、单独补传按钮、历史图片API；多模态检索仍下一批。详见docs/markdown-images.md。
+
+2026-11-05：三模块方案第一批交付PyMuPDF直接按页构建v2 SQLite快照（pdf_archive.py/source_archive.py），新网页有界上传/页级进度/翻页/引用定位，替换和重解析保留旧版本。自主学习CLI与清单→本批复查→题目接Reader；旧内联/v1快照兼容，通用load_pdf及Docling仍全量。新v2整份索引尚未建立，普通Agent可直接读行/看页，整书search_notes明确失败并记诊断；本批/选段检索可用，旧集合全文清单/直接整份出题引导新入口。新增7项受控检查及必要相关检查通过，无真实模型/浏览器/全量回归、无提交推送或服务重启；20MB/200页和2MB限制保留。失败网页暂存原件/检查点保留，尚无单独继续导入按钮/自动清理。Markdown图片和对象检索仍待后续。见docs/pdf-archive.md，旧“首次必全量组装”不适用于新PyMuPDF路径。
+
+2026-11-04最新：按用户简化要求，learning_batches.py将大资料顺序交给原规划/正式目标/本批复查链路，完成一批等待“继续生成下一批”；不做跨批整体去重，不建设全局目标分页工作集。父任务共享额度、期望批号幂等、旧批可选目标出题；source_reader.py保存版本化SQLite行存档，子任务/练习按范围加载，不复制整书。父attempt在子发布事务内校验，网页版本检查不加载完整source_json。新增5项受控分批/API检查，其他必要相关检查见docs/learning-planner.md；无真实模型/浏览器/全量回归、Git提交或部署。首次解析仍完整Document，保留PDF20MB/200页及Markdown2MB限制，勿称任意超大PDF支持。旧整体复查描述仅适用于单文档或当前批次。
+
+2026-11-04：learning_pipeline.py接单文档正式目标、自动整体复查、选目标首次练习，网页新任务formalize默认true（CLI显式--formalize）；旧纯规划保留手动入口。stage与status分离，能力去向/复查前原清单/增量修订及替代目标digest保存，同任务预算不重置。题目与任务结果同事务发布，复用PracticeStore作答及自选加入；视觉回执随快照传入反馈/复习，原文字入口无回执仍拒绝视觉引用。6项新增与相关22个不同受控测试通过，无真实模型/浏览器/全量回归，无提交或部署。仍有20MB/200页和累计请求容量边界；未接旧outline_final_review草稿，勿声称任意超大资料或真实语义质量已验证。见docs/learning-planner.md。
+
+2026-11-03：单文档学习规划接入阅读区网页入口及5个API（含创建/列表、详情、暂停/恢复），复用StreamRunner.detached共享准入。规划状态与正式学习记录分存同库，attempt撤销和事务内文档revision/移出检查阻止迟到发布，恢复默认不增额。网页提供历史、能力和原文/视觉引用展示。5项新增受控网页/后台测试；未做浏览器和真实模型验收，正式目标/出题及整体复查尚未接入。见docs/learning-planner.md。
+
+2026-11-02：新增learning_planner.py独立实验CLI/后端，复用KnowledgeTools自主阅读、证据ID、处理账本、能力目录及SQLite恢复，不接V1/V2或旧整体复查。12项新增与相关50项受控测试通过，无真实模型调用。calls_reserved为请求前预留计数，不是真实HTTP消费；默认16，恢复不隐式增额。当前仅单文档轻量规划，无网页/正式目标出题/Markdown视觉读取，导航与累积证据超预算会暂停，不能声称完整方案交付。见docs/learning-planner.md。
+
+2026-11-02：PDF基础解析新增逐页原子检查点，CLI使用.parsed/pages，网页使用notes_dir.parent/pdf-parse-pages；身份绑定原件/配置/页码，失败重试只重做未完成页。force及网页重新解析跳过缓存，完整Document齐备后才发布。8项新增和相关57项通过。仍保留20MB/200页上限，原件读取与最终组装仍占完整内存；不把该功能称为超大文件支持或Docling/VLM费用幂等。见docs/pdf-parse-resume.md。保留工作区已有暂存文件，不在本轮自动提交/推送。
+
 2026-10-30：多模态方案首批仅完成PDF自主视觉导航。inspect_visual增加可选bbox（相对所选图像的0..1坐标）和include_page，默认不附整页；pdf_regions.py提供来源版本绑定的crop1区域ID，按实际旋转/CropBox映射并从原件有界重渲染。suggested_regions/navigation不授予引用权，viewed_assets只包含实际发送图像，旧回执兼容。VLM_MAX_IMAGES/VLM_IMAGE_TOKEN_ALLOWANCE为资源配置，不是阅读顺序规则。相关84项受控测试通过，无真实模型验收；资料分片、派生索引、清单自主补读及整体复查仍未完成。见docs/pdf-visual-navigation.md，勿把工作区旧outline_final_review草稿视作已验收。
 
 V2实验分支：outline_v2.py按ContentBlock和完整请求预算直接提取，plan.version=2保存generation_budget/模型端点身份，恢复与实际SDK使用该预算。V1/legacy保留，API和网页仍默认V1。V2默认应用预算131072可配置，计数仍是UTF-8字节保守估算；未声称服务精确token计数。结构拆批父项superseded，主范围并集覆盖，辅助表头不单独产目标，失败/重试usage诊断保留。候选上限与截断触发有限拆分。尚无真实V1/V2质量/费用结论；docs/outline-v2-experiment-plan.md必须待本轮用户确认后才能执行。

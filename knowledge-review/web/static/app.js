@@ -88,7 +88,8 @@ function showFocus(start, end) {
   state.focus = { documentId: state.current.id, sourceId: state.current.source_id, start, end };
   $("selection-card").classList.remove("empty");
   $("selection-range").textContent = `${state.current.name} · L${start}–L${end}`;
-  $("selection-preview").textContent = state.current.lines.slice(start - 1, end).join("\n").slice(0, 400);
+  const offset = (state.current.window_start || 1) - 1;
+  $("selection-preview").textContent = state.current.lines.slice(Math.max(0, start - 1 - offset), Math.max(0,end-offset)).join("\n").slice(0, 400);
   $("line-start").value = start;
   $("line-end").value = end;
   $("line-start").max = state.current.line_count;
@@ -98,18 +99,18 @@ function showFocus(start, end) {
   $("practice-selection").textContent = `当前选段：${state.current.name} · L${start}–L${end}`;
 }
 
-function renderSourceLines(lines) {
+function renderSourceLines(lines, start = 1) {
   const container = $("source-note");
   container.replaceChildren();
   const fragment = document.createDocumentFragment();
   lines.forEach((text, index) => {
     const row = document.createElement("div");
     row.className = "source-line";
-    row.dataset.lineStart = String(index + 1);
-    row.dataset.lineEnd = String(index + 1);
+    row.dataset.lineStart = String(index + start);
+    row.dataset.lineEnd = String(index + start);
     const number = document.createElement("span");
     number.className = "line-number";
-    number.textContent = String(index + 1);
+    number.textContent = String(index + start);
     const content = document.createElement("span");
     content.className = "line-content";
     content.textContent = text || " ";
@@ -119,12 +120,13 @@ function renderSourceLines(lines) {
   container.append(fragment);
 }
 
-async function openDocument(id, expectedSourceId = null) {
+async function openDocument(id, expectedSourceId = null, query = '') {
   const epoch = ++state.documentEpoch;
   try {
-    const doc = await request(`/api/documents/${encodeURIComponent(id)}`);
+    const doc = await request(`/api/documents/${encodeURIComponent(id)}${query ? `?${query}` : ''}`);
     if (epoch !== state.documentEpoch) return null;
     state.current = doc;
+    document.dispatchEvent(new CustomEvent('learning-document-changed'));
     clearFocus();
     $("document-title").textContent = doc.name;
     $("document-meta").textContent = doc.format === 'pdf'
@@ -133,7 +135,17 @@ async function openDocument(id, expectedSourceId = null) {
     $('view-source').textContent = doc.format === 'pdf' ? '提取文本' : '原文';
     $('reparse-document').hidden = doc.format !== 'pdf';
     $("rendered-note").innerHTML = doc.html;
-    renderSourceLines(doc.lines);
+    renderSourceLines(doc.lines, doc.window_start || 1);
+    $('document-page-navigation')?.remove();
+    if (doc.paged) {
+      const nav = makeElement('div', 'line-controls'); nav.id = 'document-page-navigation';
+      nav.append(makeElement('span', '', `第 ${doc.page}/${doc.page_count} 页 · L${doc.window_start}–L${doc.window_end}`));
+      for (const [label, target] of [['上一部分', doc.previous_query], ['下一部分', doc.next_query]]) {
+        const button = makeElement('button', '', label); button.type = 'button'; button.disabled = !target;
+        button.onclick = () => openDocument(id, doc.source_id, target); nav.append(button);
+      }
+      $('document-meta').after(nav);
+    }
     $("reader-empty").hidden = true;
     renderCatalog();
     $("reader-scroll").scrollTop = 0;
@@ -198,9 +210,9 @@ async function showCitation(citation) {
     dialog.append(close); dialog.addEventListener("close", () => dialog.remove());
     document.body.append(dialog); dialog.showModal(); return;
   }
-  const doc = await openDocument(citation.document_id, citation.source_id);
+  const doc = await openDocument(citation.document_id, citation.source_id, `line_start=${citation.line_start}`);
   if (!doc || doc.source_id !== citation.source_id) return;
-  if (doc.format === 'pdf' && doc.assets) {
+  if ((doc.format === 'pdf' || citation.asset_id) && doc.assets) {
     const page = (citation.locations || []).find((loc) => loc.page)?.page;
     const block = (doc.blocks || []).find((b) => b.line_start <= citation.line_end && b.line_end >= citation.line_start && b.asset_ids.length);
     const assetId = citation.asset_id || block?.asset_ids[0] || (page ? `page-${page}` : null);
@@ -218,10 +230,9 @@ async function showCitation(citation) {
   setView("source");
   document.querySelectorAll(".citation-highlight").forEach((node) => node.classList.remove("citation-highlight"));
   const lines = [...$("source-note").querySelectorAll(".source-line")];
-  for (let number = citation.line_start; number <= citation.line_end; number++) {
-    lines[number - 1]?.classList.add("citation-highlight");
-  }
-  lines[citation.line_start - 1]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  for (const line of lines) if (Number(line.dataset.lineStart) >= citation.line_start &&
+      Number(line.dataset.lineStart) <= citation.line_end) line.classList.add('citation-highlight');
+  lines.find(line => Number(line.dataset.lineStart) === citation.line_start)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function renderAnswer(result, container = $("answer-result")) {
@@ -618,17 +629,29 @@ async function importFiles(event) {
   const files = [...event.target.files];
   if (!files.length) return;
   const data = new FormData();
-  files.forEach((file) => data.append("files", file));
+  files.forEach((file) => data.append(/\.(md|pdf)$/i.test(file.name) ? 'files' : 'images', file, file.webkitRelativePath || file.name));
   setStatus("import-status", `正在导入 ${files.length} 份笔记……`);
+  const importId = crypto.randomUUID().replaceAll('-', '');
+  let checking = false, importing = true;
+  const progress = setInterval(async () => {
+    if (checking) return; checking = true;
+    try {
+      const value = await request(`/api/document-imports/${importId}`);
+      if (importing && value.status === 'running') setStatus('import-status', `正在导入第 ${value.file_index}/${value.total_files} 份资料` +
+        (value.total_pages ? ` · 已解析 ${value.completed_pages}/${value.total_pages} 页` : '……'));
+    } catch { /* The initial upload may not yet have registered its progress. */ }
+    finally { checking = false; }
+  }, 1000);
   try {
     const targetCollection = state.collectionId;
-    const imported = await request(`/api/documents?collection_id=${encodeURIComponent(targetCollection)}`, { method: "POST", body: data });
+    const imported = await request(`/api/documents?collection_id=${encodeURIComponent(targetCollection)}&import_id=${importId}`, { method: "POST", body: data });
     await refreshCatalog();
     if (state.collectionId === targetCollection) await openDocument(imported[0].id);
     setStatus("import-status", `已导入 ${imported.length} 份笔记。`);
   } catch (error) {
     setStatus("import-status", error.message, true);
   } finally {
+    importing = false; clearInterval(progress);
     event.target.value = "";
   }
 }
@@ -674,6 +697,9 @@ function practiceCitation(citation) {
   button.type = "button";
   button.title = citation.excerpt;
   button.append(makeElement("small", "", citation.excerpt));
+  if (citation.evidence_method === 'vlm_visual_interpretation') {
+    button.append(makeElement('small', '', `VLM 观察（非原文转写）${citation.visual_limitations ? ` · ${citation.visual_limitations}` : ''}`));
+  }
   button.addEventListener("click", () => showCitation(citation));
   return button;
 }

@@ -26,19 +26,21 @@ from agent_loop import document_focus, run_agent
 from embedding_config import select_embedding_config
 from knowledge_tools import KnowledgeTools, knowledge_tool_definitions
 from practice_service import grade_pending_answer, start_practice
-from practice_store import DEFAULT_PRACTICE_DB, PracticeStore, public_session
+from practice_store import DEFAULT_PRACTICE_DB, PracticeStore, public_session, archived_sources
 from learning_store import LearningStore
 from learning_types import Assessment, Capability, ReviewRating, LearningDraft
 from learning_service import enroll_question, start_review, add_dimension, correct_grade
 from response_preferences import ResponseLanguage
 from sources import Source, load_sources, source_from_document
+from source_reader import StoredSource, read_lines, line_count, snapshot as source_snapshot, open_snapshot
+from learning_metrics import summary as metrics_summary
 from document_model import Document as ParsedDocument, snapshot_metadata, citation_metadata
 from dotenv import load_dotenv
 from conversation_store import ConversationStore, ConversationBusy
 from conversation_context import build_context
 from conversation_memory import ConversationMemory, MemoryAnswer, SourceMemoryAnswer, memory_tool_definitions
 from generation_budget import GenerationBudget, BudgetError
-from answers import NoteAnswer, SourceOnlyAnswer
+from answers import NoteAnswer, SourceOnlyAnswer, Citation
 from context import format_context
 from structured_output import structured_protocols
 from library_store import LibraryStore
@@ -137,7 +139,7 @@ class DocumentCatalog:
             raise ValueError("不能导入空笔记。")
         return safe_name, text
 
-    def import_note(self, safe_name: str, text: str | bytes, parsed=None) -> Document:
+    def import_note(self, safe_name: str, text: str | bytes, parsed=None, images=None) -> Document:
         folder_id = uuid4().hex
         folder = self.notes_dir / folder_id
         folder.mkdir(parents=True)
@@ -146,6 +148,9 @@ class DocumentCatalog:
             path.write_bytes(text)
             (folder / 'document.json').write_text(json.dumps(parsed.to_dict(), ensure_ascii=False), encoding='utf-8')
         else:
+            if images:
+                from markdown_images import import_images
+                import_images(path,text,images)
             path.write_text(text, encoding="utf-8")
         return Document(f"upload-{folder_id}", path, safe_name)
 
@@ -262,6 +267,28 @@ class OutlineRequest(CollectionPracticeRequest):
     request_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
     algorithm: Literal['v1', 'v2'] = 'v1'
     context_tokens: int | None = Field(default=None, ge=8192, le=1048576)
+
+
+class PlanningRequest(CollectionPracticeRequest):
+    request_id: str = Field(min_length=1,max_length=100,pattern=r'^[a-zA-Z0-9_-]+$')
+    source_id: str = Field(min_length=1)
+    max_requests: int = Field(default=16,ge=1,le=128)
+    formalize: bool = True
+    visual_coverage: bool = False
+
+
+class PlanningResumeRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid',strict=True)
+    additional_calls: int = Field(default=0,ge=0,le=128)
+
+
+class PlanningExerciseRequest(PlanningResumeRequest):
+    goal_id: str = Field(min_length=1, max_length=200)
+    batch_index: int | None = Field(default=None,ge=1)
+
+
+class PlanningNextBatchRequest(PlanningResumeRequest):
+    batch_index: int = Field(ge=2)
 
 
 class OutlineEditRequest(BaseModel):
@@ -412,7 +439,7 @@ def _source_for(document: Document) -> Source:
     if document.path.suffix.lower() == '.pdf':
         try:
             data = document.source_override or json.loads((document.path.parent / 'document.json').read_text(encoding='utf-8'))
-            source = source_from_document(document.path, ParsedDocument.from_dict(data))
+            source = open_snapshot(data) if data.get('reader') else source_from_document(document.path, ParsedDocument.from_dict(data))
             from pdf_parser import raw_path
             raw_path(source)
             return source
@@ -421,7 +448,8 @@ def _source_for(document: Document) -> Source:
     if document.text_override is not None:
         path = document.path.resolve()
         text = document.text_override
-        return Source(sha256((str(path) + '\0' + text).encode('utf-8')).hexdigest(), path, text)
+        from markdown_images import bind_source
+        return bind_source(path,text,sha256((str(path) + '\0' + text).encode('utf-8')).hexdigest())
     try:
         return load_sources([document.path])[0]
     except (OSError, UnicodeError, ValueError) as exc:
@@ -457,6 +485,9 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     app.state.practice_store = practice_store
     app.state.library_store = library
     app.state.outline_store = outlines
+    from learning_planner import PlanningStore, run_planning
+    planning = PlanningStore(practice_store.path)
+    app.state.planning_store = planning
     templates = Jinja2Templates(directory=ROOT / "web" / "templates")
     app.mount("/static", StaticFiles(directory=ROOT / "web" / "static"), name="static")
 
@@ -525,6 +556,8 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         for doc in catalog.list():
             if memberships.get(doc.document_id, 'root') in allowed:
                 source = _source_for(doc)
+                if isinstance(source,StoredSource):
+                    raise ValueError('此资料使用按页存档，请在阅读区使用自主学习清单；旧集合清单尚不支持该格式。')
                 snapshots.append({'document_id': doc.document_id, 'source_id': source.source_id,
                                   'path': str(source.path), 'name': doc.name, 'text': source.text, **snapshot_metadata(source)})
         return snapshots
@@ -550,6 +583,198 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 if row['status'] in ('queued', 'running'):
                     row['status'] = public_outline(outlines, row['id'], collection_snapshots)['status']
             return result
+        return outline_action(action)
+
+    def planning_current(job):
+        document_id=job['inputs'].get('document_id')
+        if not document_id:
+            raise HTTPException(409,'此任务没有网页资料绑定。')
+        if job['inputs']['snapshot'].get('reader'):
+            # Read revision/access without fetching the full parsed document JSON.
+            with closing(practice_store._connect()) as db:
+                row=db.execute('SELECT revision,removed FROM document_states WHERE document_id=?',
+                               (document_id,)).fetchone()
+            source=archived_sources([job['inputs']['snapshot']])[0]
+            from source_reader import file_digest
+            from pdf_parser import raw_path
+            physical=raw_path(source) if source.document and source.document.format=='pdf' else source.path
+            if row is None or row['removed'] or row['revision']!=job['inputs']['document_revision'] or (
+                    not source.file_hash or file_digest(physical)!=source.file_hash):
+                raise HTTPException(409,'资料版本已变化，请按当前资料创建规划。')
+            return source
+        document=catalog.get(document_id)
+        source=_source_for(document)
+        if source.source_id != job['inputs']['snapshot']['source_id'] or (
+                job['inputs'].get('document_revision') is not None and
+                document.revision != job['inputs']['document_revision']):
+            raise HTTPException(409,'资料版本已变化，请按当前资料创建规划。')
+        return source
+
+    def batch_job(job, index=None):
+        if not job.get('batches'):
+            if index is not None:
+                raise ValueError('此任务没有分批。')
+            return job
+        index=index if index is not None else job.get('working_batch') or job['batch_cursor']+1
+        if not 1<=index<=len(job['batches']):
+            raise ValueError('批次编号无效。')
+        child=job['batches'][index-1]['job_id']
+        if not child:
+            raise ValueError('此批次尚未开始。')
+        return planning.get(child)
+
+    def root_job(identity):
+        job=planning.get(identity)
+        if job['inputs'].get('parent_id'):
+            raise ValueError('请从父任务操作批次，以保留共享额度及取消保护。')
+        return job
+
+    def public_planning(job, batch_index=None):
+        if job.get('batches'):
+            from learning_batches import batch_summary
+            summaries=batch_summary(planning,job)
+            index=batch_index if batch_index is not None else job.get('working_batch') or job['batch_cursor']+1
+            if not 1<=index<=len(job['batches']):
+                raise ValueError('批次编号无效。')
+            selected=batch_job(job,index) if job['batches'][index-1]['job_id'] else job
+            result=public_planning(selected) if selected is not job else public_single_planning(job)
+            return {**result,'id':job['id'],'status':job['status'],'error':job['error'],
+                'metrics':metrics_summary(planning,job['id']),
+                'calls_reserved':job['calls_reserved'],'call_limit':job['call_limit'],
+                'batches':summaries,'batch_index':index,'batch_status':selected['status'],
+                'batch_cursor':job['batch_cursor']+1,'working_batch':job.get('working_batch'),
+                'batch_range':[job['batches'][index-1]['line_start'],job['batches'][index-1]['line_end']],
+                'completed_batches':sum(s['generation_complete'] for s in summaries),
+                'can_next':job['status']=='waiting_next'}
+        if batch_index is not None:
+            raise ValueError('此任务没有分批。')
+        return public_single_planning(job)
+
+    def public_single_planning(job):
+        try:
+            planning_current(job)
+            stale=False
+        except (HTTPException,OSError,ValueError):
+            stale=True
+        source=archived_sources([job['inputs']['snapshot']])[0]
+        evidence={identity:{**{k:v for k,v in item.items() if k!='receipt'}, 'citation':{
+            **item['citation'], 'document_id':job['inputs']['document_id'], 'name':source.path.name,
+            'excerpt':item.get('text',item.get('observation','')),
+            **citation_metadata(source,Citation.model_validate(item['citation']))}}
+            for identity,item in job['evidence'].items()}
+        formal=job.get('formal',{})
+        revisions=[dict(stage=e['stage'],note=e['note'],changes=e['changes'])
+            for e in job['events'] if e.get('stage') in ('refine','review') and e['action']=='save']
+        return {key:job[key] for key in ('id','status','items','dispositions','units',
+                'calls_reserved','call_limit','error')} | dict(stale=stale,
+                stage=job.get('stage','planning'), formal=formal, revisions=revisions,
+                metrics=metrics_summary(planning,job['id']), runtime=job.get('runtime'),
+                visual_coverage=job.get('visual_coverage'),visual_coverage_enabled=job['inputs'].get('visual_coverage',False),
+                parse_status=source.document.status if source.document else None,
+                parse_issues=list(source.document.issues) if source.document else [],
+                questions={key:dict(session_id=value['session_id']) for key,value in job.get('questions',{}).items()},
+                evidence=evidence,document_id=job['inputs']['document_id'],source_id=job['inputs']['snapshot']['source_id'])
+
+    @app.get('/api/documents/{identity}/learning-plans')
+    def list_planning(identity:str):
+        catalog.get(identity)
+        return [public_planning(job) for job in planning.list_for(identity)]
+
+    @app.post('/api/documents/{identity}/learning-plans',status_code=202)
+    @streams.detached('planning',resume=False)
+    def create_planning(identity:str,payload:PlanningRequest,background:BackgroundTasks):
+        document=catalog.get(identity)
+        source=_source_for(document)
+        if source.source_id != payload.source_id:
+            raise HTTPException(409,'资料版本已变化，请刷新。')
+        def action():
+            job_id=planning.create(source,payload.objective or '整理值得掌握的能力及必要条件',
+                payload.request_id,language=payload.response_language,max_requests=payload.max_requests,
+                document_id=identity,document_revision=document.revision,formalize=payload.formalize,visual_coverage=payload.visual_coverage)
+            job=planning.get(job_id)
+            if job['status']=='queued':
+                background.add_task(run_planning,planning,job_id,lambda:planning_current(planning.get(job_id)))
+            return {'id':job_id}
+        return outline_action(action)
+
+    @app.get('/api/learning-plans/{identity}')
+    def read_planning(identity:str,batch_index:int | None=None):
+        return outline_action(lambda:public_planning(root_job(identity),batch_index))
+
+    @app.post('/api/learning-plans/{identity}/next-batch',status_code=202)
+    @streams.detached('planning',resume=True)
+    def next_planning_batch(identity:str,payload:PlanningNextBatchRequest,background:BackgroundTasks):
+        def action():
+            job=root_job(identity)
+            planning_current(job)
+            if not job.get('batches') or payload.batch_index>len(job['batches']):
+                raise ValueError('批次编号无效。')
+            if payload.batch_index>job['batch_cursor']+1:
+                if job['status']!='waiting_next' or payload.batch_index!=job['batch_cursor']+2:
+                    raise ValueError('请先完成当前批次。')
+                background.add_task(run_planning,planning,identity,
+                    lambda:planning_current(planning.get(identity)),next_batch=payload.batch_index,
+                    additional_calls=payload.additional_calls)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/learning-plans/{identity}/resume',status_code=202)
+    @streams.detached('planning',resume=True)
+    def resume_planning(identity:str,payload:PlanningResumeRequest,background:BackgroundTasks):
+        def action():
+            job=root_job(identity)
+            planning_current(job)
+            if job['status'] not in ('completed','waiting_next'):
+                background.add_task(run_planning,planning,identity,
+                    lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/learning-plans/{identity}/pause')
+    def pause_planning(identity:str):
+        def action():
+            root_job(identity)
+            planning.pause(identity)
+            streams.cancel_job('planning',identity)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/learning-plans/{identity}/formalize',status_code=202)
+    @streams.detached('planning',resume=True)
+    def formalize_planning(identity:str,payload:PlanningResumeRequest,background:BackgroundTasks):
+        def action():
+            job=root_job(identity)
+            planning_current(job)
+            if job.get('batches'):
+                selected=batch_job(job)
+                if selected['status']!='completed' or selected.get('stage')!='planning':
+                    raise ValueError('仅能将当前已完成的轻量规划转为正式清单。')
+            if job.get('stage','planning')=='planning' and job['status']!='completed':
+                raise ValueError('请先完成轻量规划。')
+            if job.get('stage')!='ready':
+                background.add_task(run_planning,planning,identity,
+                    lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls,formalize=True)
+            return {'id':identity}
+        return outline_action(action)
+
+    @app.post('/api/learning-plans/{identity}/questions',status_code=202)
+    @streams.detached('planning',resume=True)
+    def planning_question(identity:str,payload:PlanningExerciseRequest,background:BackgroundTasks):
+        def action():
+            job=root_job(identity)
+            planning_current(job)
+            selected=batch_job(job,payload.batch_index)
+            if payload.goal_id not in selected.get('formal',{}).get('goals',{}):
+                raise ValueError('正式目标不存在。')
+            if not selected.get('questions',{}).get(payload.goal_id):
+                if selected.get('stage')!='ready' or selected['status']!='completed':
+                    raise ValueError('请先完成本批复查；中断的出题请用继续按钮恢复。')
+                if job.get('batches') and job['status'] not in ('waiting_next','completed'):
+                    raise ValueError('请先完成或恢复当前操作，再选择目标出题。')
+                background.add_task(run_planning,planning,identity,
+                    lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls,
+                    question_goal_id=payload.goal_id,question_batch=payload.batch_index)
+            return {'id':identity}
         return outline_action(action)
 
     @app.post('/api/collections/{identity}/outlines', status_code=202)
@@ -765,9 +990,11 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             payload.unit_id, payload.response_language, collection_snapshots))
 
     @app.get("/api/documents/{document_id}")
-    def read_document(document_id: str):
+    def read_document(document_id: str,page:int=1,line_start:int | None=None):
         doc = catalog.get(document_id)
         source = _source_for(doc)
+        if isinstance(source,StoredSource):
+            return read_stored_document(doc,source,page,line_start)
         result = {
             "id": doc.document_id,
             "name": doc.name,
@@ -781,6 +1008,21 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         structure = source.document
         result.update(format=structure.format, blocks=[b.__dict__ for b in structure.blocks] if structure.format == 'pdf' else [],
                       page_count=structure.page_count, status=structure.status, issues=list(structure.issues))
+        if structure.format=='markdown' and structure.assets:
+            from html import unescape
+            from document_model import markdown_document
+            original=markdown_document(source.text); mapping={}
+            current={b.block_id:b for b in structure.blocks}
+            for b in original.blocks:
+                for before,after in zip(b.asset_ids,current[b.block_id].asset_ids): mapping[before]=after
+            uris={a.uri:mapping.get(a.asset_id,a.asset_id) for a in original.assets}
+            result['assets']=[dict(asset_id=a.asset_id,url=f'/api/documents/{document_id}/assets/{a.asset_id}?source_id={source.source_id}')
+                              for a in structure.assets if a.asset_id.startswith('mdimg-')]
+            def image_html(match):
+                identity=uris.get(unescape(match[1]),'')
+                if not identity.startswith('mdimg-'): return '<span>［图片未导入］</span>'
+                return f'<img loading="lazy" alt="资料图片" src="/api/documents/{document_id}/assets/{identity}?source_id={source.source_id}">'
+            result['html']=re.sub(r'<img\b[^>]*src="([^"]*)"[^>]*>',image_html,result['html'])
         # Dataclass locations must be serialized explicitly rather than exposing paths.
         if structure.format == 'pdf':
             from pdf_vision import vision_status
@@ -804,6 +1046,35 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 for a in result['assets'] if a['kind'] == 'page') + '</section>'
         return result
 
+    def read_stored_document(doc,source,page,start):
+        from dataclasses import asdict
+        structure=source.document
+        try:
+            if start is not None: page=structure.page_at(start)
+            left,right=structure.page(page)
+            start=left if start is None else start
+            if not left<=start<=right: raise ValueError('读取位置不在当前页。')
+            end=min(right,start+199)
+            text=read_lines(source,start,end)
+        except ValueError as exc:
+            raise HTTPException(400,str(exc)) from exc
+        base=f'/api/documents/{doc.document_id}/assets/'
+        assets=[{**asdict(a),'url':base+a.asset_id+'?source_id='+source.source_id} for a in structure.read_assets(page)]
+        html=render_markdown(text)
+        html=re.sub(r'data-line-(start|end)="(\d+)"',lambda m:f'data-line-{m[1]}="{int(m[2])+start-1}"',html)
+        if structure.status=='partial':
+            html='<aside class="pdf-quality">资料包含待核对的解析内容；请结合原始页面查看，完整问题记录见学习清单的解析提示。</aside>'+html
+        html+='<section class="pdf-originals"><h3>原始页面</h3>'+''.join(
+            f'<details><summary>第 {a["page"]} 页原图</summary><img loading="lazy" alt="原始页面" src="{escape(a["url"])}"></details>'
+            for a in assets if a['kind']=='page')+'</section>'
+        return dict(id=doc.document_id,name=doc.name,source_id=source.source_id,revision=doc.revision,
+            managed=doc.document_id.startswith('upload-'),line_count=source.line_count,lines=text.splitlines(),html=html,
+            format='pdf',blocks=[asdict(b) for b in structure.read_blocks(start,end)],page_count=structure.page_count,
+            status=structure.status,issues=[i for i in structure.issues if i.get('page')==page],assets=assets,
+            paged=True,page=page,window_start=start,window_end=end,
+            previous_query=(f'line_start={max(left,start-200)}' if start>left else f'page={page-1}' if page>1 else None),
+            next_query=(f'line_start={end+1}' if end<right else f'page={page+1}' if page<structure.page_count else None))
+
     @app.get('/api/documents/{document_id}/assets/{asset_id}')
     def read_asset(document_id: str, asset_id: str, source_id: str):
         source = _source_for(catalog.get(document_id))
@@ -811,33 +1082,127 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(409, detail='资源属于旧资料版本，请查看当时的引用快照。')
         try:
             from pdf_parser import render_asset
+            if source.document.format=='markdown':
+                from markdown_images import render
+                return Response(render(source,asset_id)[0],media_type='image/png',headers={'Cache-Control':'private, no-store'})
             return Response(render_asset(source, asset_id), media_type='image/png', headers={'Cache-Control': 'private, no-store'})
         except (OSError, ValueError) as exc:
             raise HTTPException(404, detail='当前版本没有这个视觉资源。') from exc
 
     @app.post("/api/documents", status_code=201)
-    async def import_documents(request: Request, files: list[UploadFile] = File(...), collection_id: str = "root"):
+    async def import_documents(request: Request, files: list[UploadFile] = File(...), collection_id: str = "root",import_id:str | None=None,images:list[UploadFile]=File(default=[])):
         learning_action(lambda: library.get(collection_id))
         if not 1 <= len(files) <= MAX_SCOPE:
             raise HTTPException(status_code=400, detail=f"每次最多导入 {MAX_SCOPE} 份笔记。")
+        from pdf_parse_cache import write_record
+        progress_path=None
+        progress_state=dict(status='running',file_index=0,total_files=len(files),phase='uploading')
+        progress_lock=Lock()
+        if import_id is not None:
+            if not re.fullmatch('[0-9a-f]{32}',import_id): raise HTTPException(400,'导入进度标识无效。')
+            progress_path=notes_dir.parent/'pdf-import-progress'/(import_id+'.json')
+            if progress_path.exists(): raise HTTPException(409,'此导入进度标识已使用，请新建导入。')
+            write_record(progress_path,progress_state)
+        def report(value):
+            with progress_lock:
+                if progress_path and progress_state['status']=='running':
+                    progress_state.update(value); write_record(progress_path,progress_state)
         prepared = []
-        for file in files:
-            from pdf_parser import MAX_PDF_BYTES
-            content = await file.read(MAX_PDF_BYTES + 1)
+        image_data={}
+        if images:
+            from markdown_images import relative_name,checked_image,MAX_BYTES
+            if len(files)!=1 or not (files[0].filename or '').lower().endswith('.md') or len(images)>20:
+                raise HTTPException(400,'附图导入请一次选择一份Markdown及最多20张图片。')
             try:
-                safe_name, body = catalog.prepare_import(file.filename or "", content)
-                parsed = None
-                if isinstance(body, bytes):
-                    parsed = await parse_document_pdf(body, safe_name, request)
-                prepared.append((safe_name, body, parsed))
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                for image in images:
+                    name=relative_name(image.filename or '')
+                    if name in image_data: raise ValueError('图片相对路径重复。')
+                    body=await image.read(MAX_BYTES+1); checked_image(body); image_data[name]=body
+                    if sum(map(len,image_data.values()))>32*1024*1024: raise ValueError('附图总量不能超过32MB。')
+            except (ValueError,OSError) as exc:
+                if progress_path:
+                    with progress_lock:
+                        progress_state.update(status='interrupted'); write_record(progress_path,progress_state)
+                raise HTTPException(400,str(exc)) from exc
+        staged=[]
         imported = []
-        for safe_name, text, parsed in prepared:
-            doc = catalog.import_note(safe_name, text, parsed)
-            imported.append({"id": doc.document_id, "name": doc.name, "collection_id": collection_id})
-        library.assign_documents([doc["id"] for doc in imported], collection_id)
+        published=False
+        try:
+            for index,file in enumerate(files,1):
+                report(dict(file_index=index,phase='uploading',completed_pages=0,total_pages=None))
+                if (file.filename or '').lower().endswith('.pdf'):
+                    folder_id=uuid4().hex
+                    folder=notes_dir.parent/'pdf-import-staging'/folder_id; folder.mkdir(parents=True)
+                    staged.append(folder)
+                    safe_name=DocumentCatalog.prepare_import(file.filename,b'%PDF-')[0]
+                    path=folder/safe_name
+                    await save_upload(file,path)
+                    final_path=notes_dir/folder_id/safe_name
+                    parsed=await parse_stored_pdf(path,final_path,safe_name,request,progress=report)
+                    record=source_snapshot(parsed) if isinstance(parsed,StoredSource) else parsed.to_dict()
+                    (folder/'document.json').write_text(json.dumps(record,ensure_ascii=False),encoding='utf-8')
+                    prepared.append((folder,folder_id,safe_name))
+                else:
+                    safe_name,body=catalog.prepare_import(file.filename or '',await file.read(MAX_UPLOAD_BYTES+1))
+                    prepared.append((None,None,(safe_name,body)))
+            for folder,folder_id,value in prepared:
+                if folder:
+                    notes_dir.mkdir(parents=True,exist_ok=True); folder.replace(notes_dir/folder_id)
+                    doc=Document('upload-'+folder_id,notes_dir/folder_id/value,value)
+                else: doc=catalog.import_note(*value,images=image_data)
+                imported.append(dict(id=doc.document_id,name=doc.name,collection_id=collection_id))
+            library.assign_documents([doc['id'] for doc in imported],collection_id)
+            published=True
+            if progress_path:
+                with progress_lock:
+                    progress_state.update(status='completed',phase='published'); write_record(progress_path,progress_state)
+        except ValueError as exc:
+            raise HTTPException(400,str(exc)) from exc
+        finally:
+            if progress_path and not published:
+                with progress_lock:
+                    progress_state.update(status='interrupted'); write_record(progress_path,progress_state)
+            import shutil
+            staging_root=(notes_dir.parent/'pdf-import-staging').resolve()
+            for folder in staged:
+                # A disconnected request may leave a real parser still exiting.
+                # Keep its raw input/checkpoints; never delete under that worker.
+                if published and folder.exists() and folder.resolve().is_relative_to(staging_root): shutil.rmtree(folder)
         return imported
+
+    @app.get('/api/document-imports/{identity}')
+    def import_progress(identity:str):
+        if not re.fullmatch('[0-9a-f]{32}',identity): raise HTTPException(404,'导入进度不存在。')
+        path=notes_dir.parent/'pdf-import-progress'/(identity+'.json')
+        if not path.is_file(): raise HTTPException(404,'导入进度不存在。')
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    async def save_upload(upload,path):
+        from pdf_parser import MAX_PDF_BYTES
+        size=0
+        with path.open('wb') as target:
+            while content:=await upload.read(65536):
+                size+=len(content)
+                if size>MAX_PDF_BYTES: raise ValueError('PDF不能超过20MB。')
+                target.write(content)
+        with path.open('rb') as check:
+            if check.read(5)!=b'%PDF-': raise ValueError('请选择有效PDF。')
+
+    async def parse_stored_pdf(path,identity_path,raw_file,request,*,force=False,progress=None):
+        from pdf_parser import profile
+        from pdf_archive import parse_pdf_stored
+        config=await run_in_threadpool(profile)
+        if config['engine']=='docling':
+            # Optional legacy converter explicitly retains its full-memory contract.
+            return await parse_document_pdf(await run_in_threadpool(path.read_bytes),raw_file,request,force=force)
+        def parse():
+            result=parse_pdf_stored(path,notes_dir.parent/'pdf-source-archives',config=config,force=force,
+                                    identity_path=identity_path,raw_file=raw_file,progress=progress)
+            checkpoint()
+            return result
+        # Parsing consumes CPU/disk even without VLM. Hold the existing bounded
+        # worker until it actually exits, with disconnect cancellation too.
+        return await streams.run(parse,request)
 
     @app.put('/api/documents/{identity}')
     async def replace_document(identity: str, expected_source_id: str, request: Request, file: UploadFile = File(...)):
@@ -846,6 +1211,22 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(400, detail='示例文档只供阅读，请导入自己的文件再替换。')
         if doc.path.suffix.lower() == '.pdf' and _source_for(doc).source_id != expected_source_id:
             raise HTTPException(409, detail='PDF 版本已变化，请刷新后再替换。')
+        if doc.path.suffix.lower()=='.pdf':
+            safe_name=catalog.prepare_import(file.filename or '',b'%PDF-')[0]
+            if not safe_name.lower().endswith('.pdf'): raise HTTPException(400,'替换文件需保持PDF格式。')
+            version_dir=doc.path.parent/'versions'; version_dir.mkdir(exist_ok=True)
+            pending=version_dir/(uuid4().hex+'.tmp')
+            try:
+                await save_upload(file,pending)
+                from source_reader import file_digest
+                version=version_dir/(file_digest(pending)+'.pdf')
+                if version.exists(): pending.unlink()
+                else: pending.replace(version)
+                parsed=await parse_stored_pdf(version,doc.path,'versions/'+version.name,request)
+                return learning_action(lambda:library.change_document(identity,_source_for(doc),expected_source_id,
+                    expected_revision=doc.revision,document=parsed))
+            except ValueError as exc: raise HTTPException(400,str(exc)) from exc
+            finally: pending.unlink(missing_ok=True)
         try:
             from pdf_parser import MAX_PDF_BYTES
             safe_name, text = catalog.prepare_import(file.filename or '', await file.read(MAX_PDF_BYTES + 1))
@@ -881,20 +1262,20 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
         if doc.path.suffix.lower() != '.pdf' or source.source_id != expected_source_id:
             raise HTTPException(409, detail='仅能重新解析当前版本的 PDF，请先刷新资料。')
         from pdf_parser import raw_path
-        data = raw_path(source).read_bytes()
         try:
-            parsed = await parse_document_pdf(data, source.document.raw_file, request)
+            parsed = await parse_stored_pdf(raw_path(source),doc.path,source.document.raw_file,request,force=True)
         except (ValueError, OSError) as exc:
             raise HTTPException(400, detail=str(exc)) from exc
         return learning_action(lambda: library.change_document(identity, source, expected_source_id,
                                expected_revision=doc.revision, document=parsed))
 
-    async def parse_document_pdf(data, raw_file, request):
+    async def parse_document_pdf(data, raw_file, request, *, force=False):
         from pdf_parser import parse_pdf, profile
         config = await run_in_threadpool(profile)
 
         def parse():
-            result = parse_pdf(data, raw_file=raw_file, config=config)
+            result = parse_pdf(data, raw_file=raw_file, config=config,
+                               checkpoint_dir=notes_dir.parent / 'pdf-parse-pages', force=force)
             # Local parsing is cooperative too: cancellation must prevent publish
             # even when it arrives after the last remote request has completed.
             checkpoint()
@@ -923,7 +1304,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             raise HTTPException(status_code=409, detail="笔记内容已变化，请重新打开这份笔记。")
         if (line_start is None) != (line_end is None):
             raise HTTPException(status_code=400, detail="选段起止行需同时提供，或同时省略以询问整篇文档。")
-        if line_start is not None and not 1 <= line_start <= line_end <= len(focus_source.text.splitlines()):
+        if line_start is not None and not 1 <= line_start <= line_end <= line_count(focus_source):
             raise HTTPException(status_code=400, detail="选段行号不在原文范围内。")
         return sources, documents_by_id, focus_source
 
@@ -941,7 +1322,8 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 guard_documents(list(documents_by_id.values()), sources)
                 return {'control': control}, conversation_context.snapshot() if conversation_context else {}
             tools = KnowledgeTools(sources, select_embedding_config("e5-small"), retrieval_mode=payload.retrieval_mode,
-                                   index_path=practice_store.path.parent/'embeddings.sqlite3')
+                                   reading_range=(payload.line_start,payload.line_end) if isinstance(focus_source,StoredSource) and payload.line_start else None,
+                                   index_path=practice_store.path.parent/'embeddings.sqlite3',object_db=practice_store.path)
             if diagnostics is not None:
                 diagnostics['retrieval'] = {'mode':payload.retrieval_mode,'searches':tools.retrieval_trace}
             focus = (document_focus(focus_source, payload.line_start, payload.line_end)
@@ -989,9 +1371,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                     "line_start": citation.line_start,
                     "line_end": citation.line_end,
                     **citation_metadata(source_by_id[citation.source_id], citation),
-                    "excerpt": "\n".join(source_by_id[citation.source_id].text.splitlines()[
-                        citation.line_start - 1:citation.line_end
-                    ]),
+                    "excerpt": read_lines(source_by_id[citation.source_id],citation.line_start,citation.line_end),
                 } for citation in block.citations],
             } for block in run.answer.blocks],
             "steps": [{"name": step.name, "arguments": step.arguments, "error": step.error}
@@ -1143,7 +1523,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 focus = document_focus(focus_source, payload.line_start, payload.line_end) if payload.line_start is not None else None
                 required_data = {
                     "question": payload.question, "response_language": payload.response_language,
-                    "materials": [{"id": s.source_id, "name": s.path.name, "lines": len(s.text.splitlines())} for s in sources],
+                    "materials": [{"id": s.source_id, "name": s.path.name, "lines": line_count(s)} for s in sources],
                     "focus": format_context([focus.chunk], sources) if focus else None,
                     "agent_tools": knowledge_tool_definitions() + memory_tool_definitions(),
                     "final_protocols": structured_protocols(SourceMemoryAnswer if payload.strict else MemoryAnswer),

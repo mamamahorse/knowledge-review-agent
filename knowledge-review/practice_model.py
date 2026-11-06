@@ -115,7 +115,19 @@ def _request_structured(messages: list[dict], schema: type[StrictModel], *, befo
         raise RuntimeError("the practice result was blocked by the service.") from exc
 
 
-def validate_question(draft: QuestionDraft, sources: list[Source], visible: list[Chunk]) -> None:
+def visual_receipts(record):
+    """Only trusted, persisted viewing receipts; never generated citation metadata."""
+    return [receipt for snapshot in record['snapshots'] for receipt in snapshot.get('visual_evidence', [])]
+
+
+def visual_messages(receipts):
+    if not receipts:
+        return []
+    return [dict(role='user', content=json.dumps(dict(visual_observations=receipts,
+        notice='VLM interpretations and actual viewed ranges, not verbatim source. Respect limitations.'), ensure_ascii=False))]
+
+
+def validate_question(draft: QuestionDraft, sources: list[Source], visible: list[Chunk], *, visual_evidence=None) -> None:
     validate_chunks(visible, sources)
     if not draft.objective.strip() or not draft.question.strip():
         raise ValueError("A practice question needs an objective and prompt.")
@@ -126,8 +138,14 @@ def validate_question(draft: QuestionDraft, sources: list[Source], visible: list
     by_id = {s.source_id: s for s in sources}
     def check_text_basis(citation):
         source = by_id.get(citation.source_id)
+        if source is None:
+            raise ValueError('出题引用了未知资料版本。')
         if citation.asset_id is not None:
-            raise ValueError('当前文字出题流程没有获得视觉观察的引用资格。')
+            if not any(v['source_id']==citation.source_id and v['asset_id']==citation.asset_id and
+                    v['line_start'] <= citation.line_start <= citation.line_end <= v['line_end']
+                    for receipt in visual_evidence or [] for v in receipt.get('viewed_assets',[receipt])):
+                raise ValueError('当前出题流程没有获得该视觉区域的实际查看回执。')
+            return
         if source and source.document and source.document.format == 'pdf' and not any(
             b.kind not in ('page', 'figure') and b.line_start <= citation.line_end and b.line_end >= citation.line_start
             for b in source.document.blocks):
@@ -188,7 +206,7 @@ def generate_question(sources, visible, focus_source_id, focus_start, focus_end,
 
 def validate_grade(
     grade: GradeDraft, question: QuestionDraft, answer: str,
-    sources: list[Source], visible: list[Chunk], *, can_follow_up: bool,
+    sources: list[Source], visible: list[Chunk], *, can_follow_up: bool, visual_evidence=None,
 ) -> str:
     count = len(question.rubric_points)
     covered = grade.covered_indices
@@ -203,7 +221,7 @@ def validate_grade(
     if grade.follow_up is not None and not can_follow_up:
         raise ValueError("The unit has reached its question limit.")
     if grade.follow_up is not None:
-        validate_question(grade.follow_up, sources, visible)
+        validate_question(grade.follow_up, sources, visible, visual_evidence=visual_evidence)
     for observation in grade.dimension_observations:
         if any(not quote.strip() or quote not in answer for quote in observation.answer_quotes):
             raise ValueError("Dimension observations must quote the actual answer.")
@@ -215,7 +233,7 @@ def validate_grade(
 def grade_answer(
     question: QuestionDraft, answer: str, sources: list[Source], visible: list[Chunk],
     *, can_follow_up: bool, response_language: ResponseLanguage | None = None,
-    learning_context: dict | None = None,
+    learning_context: dict | None = None, visual_evidence=None,
 ) -> tuple[GradeDraft, str]:
     context = format_context(visible, sources)
     rubric = "\n".join(f"{index}. {point}" for index, point in enumerate(question.rubric_points, 1))
@@ -235,6 +253,7 @@ def grade_answer(
     if learning_context:
         import json
         messages.append({"role": "user", "content": "Learning context:\n" + json.dumps(learning_context, ensure_ascii=False)})
+    messages.extend(visual_messages(visual_evidence))
     messages[0]["content"] += (
         " Treat the saved rubric as a reference: consider equivalent expressions and alternative valid solutions. "
         "Describe uncertainty or a flawed question when warranted. Distinguish an incorrect understanding from "
@@ -244,4 +263,5 @@ def grade_answer(
     )
     generated = _request_structured(messages, SemanticGradeDraft)
     grade = GradeDraft.model_validate(generated.model_dump())
-    return grade, validate_grade(grade, question, answer, sources, visible, can_follow_up=can_follow_up)
+    return grade, validate_grade(grade, question, answer, sources, visible, can_follow_up=can_follow_up,
+                                 visual_evidence=visual_evidence)
