@@ -119,9 +119,7 @@ async function refreshLearning() {
     section.append(add);
     list.append(section);
   });
-  if (typeof outlineJob !== 'undefined' && outlineJob && !outlineJoining && outlineJob.routes?.runs.length) {
-    await loadOutline(outlineJob.id);
-  }
+
 }
 
 function appendEnrollmentControl(card, session, item) {

@@ -68,7 +68,6 @@ async function openCollection(id) {
   await refreshCatalog();
   if (state.collectionId !== id) return;
   await refreshLearning();
-  await refreshOutlines();
 }
 
 $("collection-create-form").addEventListener("submit", async (event) => {

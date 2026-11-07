@@ -133,6 +133,7 @@ def inspect(source,identity,question,*,bbox=None,include_page=False):
     block=next(b for b in source.document.blocks if original in b.asset_ids)
     reading=vision_request([image],'Read this Markdown image as evidence. Preserve labels, units and conditions; '
         'report unreadable details and avoid inferring a complete table from a crop. Question: '+question,VisualReading)
+    if reading.suggested_pages: raise ValueError('Markdown图片没有PDF页码，请通过原文补读上下文。')
     viewed=dict(source_id=source.source_id,asset_id=asset.asset_id,resource_id=original,page=None,bbox=asset.bbox,
                 line_start=block.line_start,line_end=block.line_end)
     suggestions=[]

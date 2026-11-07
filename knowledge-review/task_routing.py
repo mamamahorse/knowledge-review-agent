@@ -6,14 +6,12 @@ from answers import StrictModel
 
 TASKS = {
     'explain': ('解释概念 / 回答问题', '讲解概念、选段或代码，按需查阅资料。', 'answer'),
-    'extract_outline': ('生成学习清单', '提取知识点和可考察目标，审核后再选择加入计划。', 'outline'),
+    'extract_outline': ('生成学习清单', '从当前文档自主阅读，生成知识与可考察目标；大文件按批继续。', 'learning_plan'),
     'practice': ('出题练习', '从当前资料或讨论生成练习题。', 'practice'),
     'assess_answer': ('评价作答 / 查看讲解', '打开已有练习，提交回答或查看反馈。', 'practice'),
-    'organize_outline': ('整合学习清单', '对已有候选进行归组、重复检查和来源复查。', 'outline'),
-    'plan_route': ('规划学习顺序', '根据已有候选建议前置关系和学习顺序。', 'outline'),
     'review_learning': ('复习已有目标', '查看已加入计划的项目并开始复习。', 'learning'),
     'recall_discussion': ('回顾以前的讨论', '搜索有效历史原话，延续已有讨论。', 'answer'),
-    'enroll_selected': ('加入复习计划', '打开清单并明确选择要加入的目标。', 'outline'),
+    'enroll_selected': ('加入复习计划', '从已生成的练习中选择加入复习计划。', 'practice'),
 }
 
 

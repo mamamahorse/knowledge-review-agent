@@ -129,10 +129,11 @@ class CancellableTransport(httpx.BaseTransport):
 def model_http_options():
     token = _current.get()
     from learning_metrics import http_options
+    from model_request_budget import attach
     measured=http_options(token)
-    if measured is not None: return measured
+    if measured is not None: return attach(measured)
     if token is None:
-        return {}
+        return attach({})
     token.check()
-    return {"http_client": httpx.Client(transport=CancellableTransport(token),
-                                      timeout=30.0, follow_redirects=True), "max_retries": 0}
+    return attach({"http_client": httpx.Client(transport=CancellableTransport(token),
+                                      timeout=30.0, follow_redirects=True), "max_retries": 0})

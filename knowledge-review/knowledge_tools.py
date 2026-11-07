@@ -345,6 +345,10 @@ class KnowledgeTools:
                     bbox=arguments.get('bbox'), include_page=arguments.get('include_page', False))
             except (RuntimeError, OSError) as exc:
                 raise ValueError(f'视觉查看未完成（{type(exc).__name__}），请保留证据缺口。') from exc
+            from agent_cancel import checkpoint
+            checkpoint()
+            from object_retrieval import publish_observation
+            publish_observation(self.object_db,observation,arguments['question'])
             return ToolExecution(observation, (block_chunk(source, block),), observation)
         raise ValueError(f"Unknown knowledge tool: {name}")
 

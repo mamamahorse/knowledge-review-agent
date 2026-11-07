@@ -15,7 +15,6 @@ from practice_model import DiscussionGrade, DiscussionQuestion, LearningQuestion
 from practice_service import grade_pending_answer
 from practice_store import public_session
 from sources import Source
-from outline_service import scope_fingerprint, public_outline
 from structured_output import structured_protocols
 from test_conversations import answer_data
 from test_support import temporary_notes
@@ -323,25 +322,6 @@ class ManagementAndChatPracticeTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400, response.text)
         self.assertEqual(self.store.list(), [])
 
-    def test_outline_version_status_and_collection_removal_preserve_record(self):
-        doc = self.imported()
-        collection = self.library.create('Outline source')
-        self.library.assign_documents([doc['id']], collection['id'])
-        snapshot = {'document_id': doc['id'], 'source_id': doc['source_id'], 'name': doc['name'],
-                    'path': str(self.root / 'uploads' / doc['id'][7:] / doc['name']), 'text': '\n'.join(doc['lines'])}
-        outlines = self.app.state.outline_store
-        identity = outlines.create(collection['id'], 'outline', '', 'en', scope_fingerprint([snapshot]), [snapshot], [], [])
-        original = self.client.get('/api/outlines/' + identity).json()
-        self.assertFalse(original['stale'])
-        self.client.put('/api/documents/' + doc['id'], params={'expected_source_id': doc['source_id']}, files={'file': ('new.md', b'# Changed\nNew basis.', 'text/markdown')})
-        self.assertTrue(self.client.get('/api/outlines/' + identity).json()['stale'])
-        listing = self.client.get('/api/collections/' + collection['id'] + '/outlines').json()
-        self.assertTrue(listing[0]['stale'])
-        self.library.remove_collection(collection['id'])
-        after = self.client.get('/api/outlines/' + identity).json()
-        self.assertTrue(after['stale'])
-        self.assertEqual(after['collection_id'], 'root')
-        self.assertEqual(outlines.get(identity)['snapshots'], [snapshot])
 
     def test_chat_job_api_retry_restores_same_session_after_reopen(self):
         payload = {**self.payload, 'request_id': 'api-exercise'}

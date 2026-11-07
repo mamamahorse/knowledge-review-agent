@@ -307,29 +307,6 @@ class OutlineTests(unittest.TestCase):
             run_outline(self.store, identity, self.current)
         self.assertEqual(self.store.get(identity)['status'], 'completed')
 
-    def test_http_nested_collection_empty_scope_and_corrected_hint(self):
-        app = create_app(self.root / 'uploads', self.practice.path)
-        parent = self.library.create('网络', 'root')['id']
-        child = self.library.create('TCP', parent)['id']
-        with TestClient(app) as client, patch('outline_service._request_structured', side_effect=fake_model):
-            self.assertEqual(client.post(f'/api/collections/{child}/outlines', json={'request_id': 'empty'}).status_code, 409)
-            imported = client.post(f'/api/documents?collection_id={child}', files=[('files', ('tcp.md', TEXT.encode(), 'text/markdown'))]).json()[0]
-            response = client.post(f'/api/collections/{parent}/outlines', json={'request_id': 'api', 'response_language': 'en'})
-            self.assertEqual(response.status_code, 202, response.text)
-            identity = response.json()['id']
-            wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
-            job = client.get(f'/api/outlines/{identity}').json()
-            self.assertEqual(job['response_language'], 'en')
-            self.assertEqual({s['document_id'] for s in job['coverage']}, {imported['id']})
-            self.assertEqual(client.get(f'/api/collections/{child}/outlines').json(), [])
-            candidate = job['candidates'][0]
-            approved = candidate['learning']
-            approved['target']['title'] = '已审核'
-            self.assertEqual(client.patch(f"/api/outline-candidates/{candidate['id']}", json={'learning': approved, 'revision': 1}).status_code, 200)
-            enrolled = client.post(f"/api/outline-candidates/{candidate['id']}/enroll", json={'revision': 2, 'collection_id': child})
-            self.assertEqual(enrolled.status_code, 200, enrolled.text)
-            self.assertNotIn('每次问答仅使用已勾选的资料', client.get('/').text)
-            self.assertIn('模型按需要查阅', client.get('/').text)
 
 
 if __name__ == '__main__':

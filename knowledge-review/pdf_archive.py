@@ -71,12 +71,10 @@ never silently repeats a recorded failed/unknown remote attempt.
 
 
 def parse_pdf_stored(path,archive_dir,*,config=None,force=False,identity_path=None,raw_file=None,progress=None):
-    from types import SimpleNamespace
-    from outline_store import OutlineStore
+    from job_lock import job_lock
     root=Path(archive_dir).resolve(); root.mkdir(parents=True,exist_ok=True)
     key=digest(str(Path(identity_path or path).resolve()))[:32]
-    owner=SimpleNamespace(practice=SimpleNamespace(path=root/'parse'))
-    with OutlineStore.lock(owner,key):
+    with job_lock(root/'parse',key):
         return _parse_pdf_stored(path,root,config=config,force=force,identity_path=identity_path,raw_file=raw_file,progress=progress)
 
 

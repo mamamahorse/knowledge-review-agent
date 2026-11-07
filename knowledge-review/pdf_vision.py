@@ -23,6 +23,9 @@ class VisionUnsupported(ValueError):
 
 class VisionRequestFailed(ValueError):
     """A sanitized service failure which does not imply lack of image support."""
+    def __init__(self,message,*,status_code=None):
+        super().__init__(message)
+        self.status_code=status_code
 
 
 VISION_CAPABILITIES: dict[tuple[str, str, str], str] = {}
@@ -123,6 +126,8 @@ class VisualReading(BaseModel):
         description='Optional regions worth reading more closely in the target image; these are navigation, not verified evidence.')
     next_read: str = Field(default='', max_length=2000,
         description='Specific missing information and useful further reading, or empty when enough is visible. Do not invent what unread pages contain.')
+    suggested_pages: list[Annotated[int,Field(strict=True,ge=1)]] = Field(default_factory=list,
+        description='PDF only: actual page numbers worth reading to resolve missing context. Use the supplied navigation; leave empty for Markdown images. Navigation is not evidence.')
 
 
 @dataclass(frozen=True)
@@ -245,9 +250,13 @@ def inspect_visual(source, asset_id, question, *, bbox=None, include_page=False)
             message = '视觉模型服务暂时无法连接，可稍后重试。'
         else:
             message = '视觉模型请求未完成，请核对服务兼容性；尚不能据此判定它不支持图片。'
-        raise VisionRequestFailed(message) from exc
+        raise VisionRequestFailed(message,status_code=status) from exc
     checkpoint()
     suggestions = []
+    pages=[]
+    for number in dict.fromkeys(reading.suggested_pages):
+        if number>source.document.page_count: raise ValueError('建议补读的页码不属于当前PDF。')
+        pages.append(dict(asset_id=f'page-{number}',page=number,reason=reading.next_read or 'Read related visual context.',viewed=False))
     for region in reading.suggested_regions:
         selected = select_region(source, asset.asset_id, region.bbox)
         suggestions.append(dict(asset_id=selected.asset_id, label=region.label, reason=region.reason,
@@ -257,5 +266,5 @@ def inspect_visual(source, asset_id, question, *, bbox=None, include_page=False)
             'observation': reading.observation, 'limitations': reading.limitations,
             'formulas':[f.model_dump() for f in reading.formulas],
             'viewed_assets': viewed, 'navigation': nav, 'suggested_regions': suggestions,
-            'next_read': reading.next_read,
+            'next_read': reading.next_read,'suggested_pages':pages,
             'method': 'vlm_visual_interpretation'}, block

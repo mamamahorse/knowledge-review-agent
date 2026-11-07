@@ -32,7 +32,7 @@ Reserve additional input space for subsequent generated catalogs, not a semantic
 goal count. Actual requests are always checked again by request_structured.
 """
     from learning_pipeline import FormalStep, formal_messages
-    from outline_service import excerpt
+    from source_excerpt import excerpt
     from outline_evidence import extraction_evidence
     from structured_output import structured_protocols
     from contextlib import closing

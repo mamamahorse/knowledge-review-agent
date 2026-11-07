@@ -19,7 +19,7 @@ from generation_budget import GenerationBudget, BudgetError
 from knowledge_tools import KnowledgeTools, knowledge_tool_definitions
 from model_client import model_settings
 from outline_evidence import available_evidence, extraction_evidence, missing_ranges
-from outline_store import OutlineStore
+from job_lock import job_lock
 from practice_store import PracticeStore, archived_sources
 from response_preferences import validate_language
 from sources import load_sources
@@ -77,7 +77,8 @@ class PlanningStore:
             from learning_metrics import initialize as initialize_metrics
             initialize_metrics(db)
 
-    lock = OutlineStore.lock
+    def lock(self, identity):
+        return job_lock(self.practice.path, identity)
 
     def get(self, identity):
         with self.practice.transaction() as db:
@@ -388,7 +389,7 @@ def run_planning(store, identity, current_source, *, additional_calls=0, formali
             from visual_discovery import initialize,apply_reviews
             initialize(state); persist()
             if state['inputs'].get('primary_range') and not state['evidence']:
-                from outline_service import excerpt
+                from source_excerpt import excerpt
                 from chunking import protect_selection
                 from knowledge_tools import ToolExecution
                 chunk=excerpt(source,*state['inputs']['primary_range'])

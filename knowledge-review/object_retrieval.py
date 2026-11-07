@@ -1,5 +1,5 @@
 """Derived object navigation. Descriptions never enter original-text evidence."""
-from contextlib import closing
+from contextlib import closing,ExitStack
 from pathlib import Path
 import json
 import sqlite3
@@ -31,7 +31,7 @@ def publish(state,db):
             if unit:
                 records.append(dict(source_id=source_id,asset_id=obj['asset_id'],kind=obj['kind'],page=obj['page'],bbox=obj['bbox'],
                     line_start=unit['line_start'],line_end=unit['line_end'],label=obj['label'],
-                    description=obj['label']+'\n'+obj['uncertainty'],origin='visual_discovery',
+                    description=obj.get('description',obj['label'])+'\n'+obj['uncertainty'],origin='visual_discovery',
                     limitations=obj['uncertainty'],model=value.get('model'),endpoint=value.get('endpoint')))
     elif event['tool']=='inspect_visual':
         for view in value.get('viewed_assets',[value]):
@@ -43,8 +43,40 @@ def publish(state,db):
     for record in records:
         record['origin_job']=state['id']
         record['origin_event']=len(state['events'])-1
-        payload=encoded(record); identity=digest(payload)
-        db.execute('INSERT OR IGNORE INTO object_descriptions VALUES (?,?,?,?)',(identity,source_id,payload,digest(payload)))
+    save_records(db,records)
+
+
+def save_records(db,records):
+    """Shared navigation publication; callers own the transaction, never citation grants."""
+    initialize(db)
+    for record in records:
+        payload=encoded(record)
+        identity=digest(encoded({k:record.get(k) for k in ('source_id','asset_id','block_id','origin','description','limitations','reading_question','viewed_assets')}))
+        db.execute('INSERT OR IGNORE INTO object_descriptions VALUES (?,?,?,?)',
+                   (identity,record['source_id'],payload,digest(payload)))
+
+
+def observation_records(value,question=None):
+    # A multi-image observation can describe relationships across views. Preserve
+    # that scope instead of pretending it describes each crop independently.
+    return [dict(source_id=value['source_id'],asset_id=view['asset_id'],kind='visual',page=view['page'],
+        bbox=view.get('bbox'),line_start=view['line_start'],line_end=view['line_end'],label='Visual reading',
+        description=value['observation']+'\n'+encoded(value.get('formulas',[])),origin='visual_observation',
+        limitations=value.get('limitations',''),viewed_assets=value.get('viewed_assets',[view]),
+        next_read=value.get('next_read',''),suggested_regions=value.get('suggested_regions',[]),
+        suggested_pages=value.get('suggested_pages',[]),reading_question=question)
+        for view in value.get('viewed_assets',[value])]
+
+
+def publish_observation(path,value,question=None):
+    """Best-effort derived indexing must not turn a successful read into a failure."""
+    if not path: return
+    try:
+        with closing(sqlite3.connect(path,timeout=1)) as db,db:
+            save_records(db,observation_records(value,question))
+    except (OSError,sqlite3.Error,ValueError,KeyError):
+        import logging
+        logging.getLogger(__name__).warning('Visual navigation publication failed; original reading remains valid.')
 
 
 def native(source):
@@ -70,6 +102,8 @@ def search(tools,query,top_k,trace):
     parent.mkdir(parents=True,exist_ok=True)
     path=parent/('object-query-'+uuid4().hex+'.sqlite3')
     source_map={s.source_id:s for s in tools.sources}
+    from cache_maintenance import temporary_use
+    lease=ExitStack(); lease.enter_context(temporary_use(path))
     try:
         with closing(sqlite3.connect(path)) as spool:
             spool.execute('CREATE TABLE records(seq INTEGER PRIMARY KEY,payload TEXT)')
@@ -93,7 +127,7 @@ def search(tools,query,top_k,trace):
                                 if record['source_id']!=source_id: raise ValueError('对象表示版本身份不匹配。')
                                 add(record)
             spool.commit()
-            fingerprint=__import__('hashlib').sha256()
+            fingerprint=__import__('hashlib').sha256(b'object-representation-v2-labels')
             for row in spool.execute('SELECT payload FROM records ORDER BY seq'): fingerprint.update((row[0]+'\n').encode())
             count=spool.execute('SELECT COUNT(*) FROM records').fetchone()[0]
             trace['representations']=count
@@ -106,7 +140,7 @@ def search(tools,query,top_k,trace):
                     for (payload,) in spool.execute('SELECT payload FROM records ORDER BY seq'):
                         record=json.loads(payload)
                         batch.append(Chunk(digest(payload),record['source_id'],(),record['line_start'],record['line_end'],
-                            record['description'],block_id=payload,kind='object_representation'))
+                            record.get('label','')+'\n'+record['description'],block_id=payload,kind='object_representation'))
                         if len(batch)==16:
                             yield number,batch; number+=1; batch=[]
                     if batch: yield number,batch
@@ -125,4 +159,6 @@ def search(tools,query,top_k,trace):
                 result.append(record)
                 if len(result)>=top_k: break
             return result
-    finally: path.unlink(missing_ok=True)
+    finally:
+        try: path.unlink(missing_ok=True)
+        finally: lease.close()

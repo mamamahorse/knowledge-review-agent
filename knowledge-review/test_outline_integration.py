@@ -348,16 +348,6 @@ class IntegrationTests(unittest.TestCase):
         retry_grouping(self.store, run, self.current, 200)
         self.assertEqual(self.execute(run)['status'], 'completed')
 
-    def test_http_pause_unknown_run_and_invalid_allowance(self):
-        from fastapi.testclient import TestClient
-        from web_app import create_app
-        self.seed(9)
-        run = self.begin()
-        with TestClient(create_app(self.root / 'notes', self.practice.path)) as client:
-            self.assertEqual(client.post(f'/api/outline-group-runs/{run}/pause').status_code, 200)
-            self.assertEqual(get_run(self.store, run)['status'], 'paused')
-            self.assertEqual(client.post('/api/outline-group-runs/unknown/pause').status_code, 404)
-            self.assertEqual(client.post(f'/api/outline-group-runs/{run}/retry', json={'call_limit': 0}).status_code, 422)
 
 
 if __name__ == '__main__':

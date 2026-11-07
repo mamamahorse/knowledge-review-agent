@@ -15,7 +15,8 @@ from answers import Citation, StrictModel
 from context import validate_chunks
 from learning_types import LearningDraft, CRITERIA_GUIDANCE
 from outline_evidence import EvidenceReferenceError, evidence_id
-from outline_service import EvidenceLearningProposal, excerpt
+from learning_contracts import EvidenceLearningProposal
+from source_excerpt import excerpt
 from practice_model import QuestionDraft, validate_question
 from visual_discovery import ObjectReview,apply_reviews,require_complete
 

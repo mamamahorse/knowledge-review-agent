@@ -271,41 +271,7 @@ class RouteTests(unittest.TestCase):
         save_order(self.store,key,r['revision'],order,[],self.current)
         self.assertEqual(self.public(job)['recommendation']['kind'],'check_prerequisite')
 
-    def test_old_process_recovery_and_api_schema_errors(self):
-        job,key=self.begin()
-        with self.practice.transaction() as db:db.execute("UPDATE outline_routes SET status='running',attempt='lost' WHERE id=?",(key,))
-        self.assertEqual(self.public(job)['status'],'failed')
-        app=create_app(self.root/'uploads')
-        with TestClient(app) as client:
-            self.assertEqual(client.post('/api/outlines/missing/routes',json={'request_id':'x','call_limit':0}).status_code,422)
-            self.assertEqual(client.post('/api/outlines/missing/routes',json={'request_id':'x'}).status_code,404)
-            self.assertEqual(client.patch('/api/outline-routes/missing/order',json={'revision':1,'order':[],'skipped':[]}).status_code,404)
-            self.assertEqual(client.patch('/api/outline-route-edges/missing',json={'revision':1,'before_id':'a','after_id':'b','kind':'prerequisite','reason':'x','decision':'accepted','unknown':1}).status_code,422)
 
-    def test_http_complete_review_order_and_no_implicit_enrollment(self):
-        from quality_route import CASES,seed_outline
-        from sources import load_sources
-        notes=self.root/'uploads';folder=notes/('a'*32);folder.mkdir(parents=True)
-        file=folder/'route.md';file.write_text(CASES['chain']['text'],encoding='utf-8')
-        source=load_sources([file])[0]
-        snapshots=[{'document_id':'upload-'+folder.name,'source_id':source.source_id,'path':str(file),'name':file.name,'text':source.text}]
-        app=create_app(notes,self.practice.path,self.root/'conversations.sqlite3')
-        collection=app.state.library_store.create('Route HTTP fixture')['id']
-        app.state.library_store.assign_documents([snapshots[0]['document_id']],collection)
-        job,_=seed_outline(app.state.outline_store,CASES['chain'],source=source,snapshots=snapshots,collection=collection)
-        with TestClient(app) as client,patch('outline_routes._request_structured',side_effect=controlled_route):
-            payload={'request_id':'http-route','response_language':'en','call_limit':2}
-            response=client.post(f'/api/outlines/{job}/routes',json=payload);self.assertEqual(response.status_code,202)
-            key=response.json()['id']
-            self.assertEqual(client.post(f'/api/outlines/{job}/routes',json=payload).json()['id'],key)
-            wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
-            r=client.get(f'/api/outlines/{job}').json()['routes']['runs'][0];self.assertEqual(r['status'],'completed')
-            e=r['edges'][0]
-            self.assertEqual(client.patch(f"/api/outline-route-edges/{e['id']}",json={**{k:e['decision'][k] for k in ('before_id','after_id','kind','reason')},'decision':'accepted','revision':1}).status_code,200)
-            r=client.get(f'/api/outlines/{job}').json()['routes']['runs'][0]
-            self.assertEqual(client.patch(f'/api/outline-routes/{key}/order',json={'revision':r['revision'],'order':r['order'][::-1],'skipped':[]}).status_code,200)
-            self.assertEqual(client.post(f'/api/outline-routes/{key}/edges',json={'revision':r['revision']+1,'before_id':r['order'][2],'after_id':r['order'][0],'kind':'helpful_first','reason':'User preference'}).status_code,201)
-        self.assertEqual(self.counts(),[0]*5)
 
     def test_active_generation_is_explicitly_rejected(self):
         job,key=self.begin()

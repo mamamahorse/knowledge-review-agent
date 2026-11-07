@@ -14,10 +14,8 @@
   <script src="/static/app.js?v={{ asset_version }}" defer></script>
   <script src="/static/library.js?v={{ asset_version }}" defer></script>
   <script src="/static/learning.js?v={{ asset_version }}" defer></script>
-  <script src="/static/outline-review.js?v={{ asset_version }}" defer></script>
-  <script src="/static/outline-route.js?v={{ asset_version }}" defer></script>
-  <script src="/static/outlines.js?v={{ asset_version }}" defer></script>
   <script src="/static/learning-planner.js?v={{ asset_version }}" defer></script>
+  <script src="/static/visual-descriptions.js?v={{ asset_version }}" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -61,6 +59,7 @@
       <p class="sidebar-hint">默认以当前整篇文档为资料范围。勾选其他资料可一起使用，点击名称打开阅读。</p>
       <div id="document-list" class="document-list" aria-live="polite"></div>
       <p id="import-status" class="import-status" role="status"></p>
+      <button id="retry-import" type="button" hidden>重试上次导入</button>
       <details class="collection-editor"><summary>移动当前文件到集合</summary>
         <select id="document-destination" aria-label="文件目标集合"></select><button id="move-document" type="button">移动文件</button>
         <label>替换当前文件正文 <input id="replace-document" type="file" accept=".md,.pdf"></label>
@@ -79,17 +78,29 @@
           <button id="view-source" type="button">原文行号</button>
         </div>
       </div>
+      <details class="outline-panel" id="visual-descriptions-panel">
+        <summary>图表检索描述</summary>
+        <p class="practice-hint">为选定页面或图片生成可搜索的描述，需要视觉模型。模型可按需补读同一PDF的其他页，计入本次额度。成功结果会复用；这不是图表无遗漏或内容正确性的保证。</p>
+        <button id="visual-descriptions-load" type="button">加载当前资料范围</button>
+        <form id="visual-descriptions-form">
+          <label>页面／图片（可多选）<select id="visual-descriptions-targets" multiple size="6" aria-label="待补全的页面或图片"></select></label>
+          <button id="visual-descriptions-all" type="button">选择全部</button>
+          <label>本次实际请求上限 <input id="visual-descriptions-limit" type="number" min="1" max="128" value="16"></label>
+          <button id="visual-descriptions-start" type="submit">补全选定范围</button>
+        </form>
+        <div id="visual-descriptions-result" aria-live="polite"></div>
+      </details>
       <details class="outline-panel" id="learning-planner-panel">
         <summary>当前资料的自主学习清单（实验）</summary>
-        <p class="practice-hint">自主阅读 → 能力规划 → 正式目标与考核标准 → 自动整体复查。完成后可选择目标出题，不会自动加入复习计划。</p>
+        <p class="practice-hint">自主阅读 → 能力规划 → 正式目标与考核标准 → 自动本批复查。完成后可选择目标出题，不会自动加入复习计划。</p>
         <form id="learning-planner-form">
           <label>学习方向 <input id="learning-planner-objective" maxlength="300" value="整理值得掌握的能力及必要条件"></label>
           <label>请求额度 <input id="learning-planner-limit" type="number" min="1" max="128" value="16"></label>
           <label><input id="learning-planner-visual" type="checkbox">检查图表与公式的视觉覆盖（需要视觉模型，占用上述额度）</label>
           <button type="submit">生成当前资料的学习清单</button>
         </form>
-        <button id="learning-planner-refresh" type="button">刷新规划历史</button>
-        <select id="learning-planner-history" aria-label="规划历史"></select>
+        <button id="learning-planner-refresh" type="button">刷新清单历史</button>
+        <select id="learning-planner-history" aria-label="清单历史"></select>
         <div id="learning-planner-result" aria-live="polite"></div>
       </details>
       <div id="reader-scroll" class="reader-scroll">
@@ -150,20 +161,7 @@
         <label>计划范围 <select id="learning-collection" aria-label="学习计划集合"></select></label>
         <button id="collection-practice" class="practice-action" type="button">从这个集合的资料开始练习</button>
         <p id="learning-status" class="request-status" role="status"></p>
-        <section class="outline-panel" aria-label="集合学习清单">
-          <h3>知识点与学习目标清单</h3>
-            <p class="practice-hint">按计划范围中的集合及子集合整理资料，自动选择全文或分层阅读。审核、修改目标并勾选后才加入计划；章节进度表示资料已分析，不表示已经掌握。</p>
-          <form id="outline-form" class="practice-start-form">
-            <label>提取算法 <select id="outline-algorithm"><option value="v1">V1 原算法（当前默认 / 对照）</option><option value="v2">V2 原文直接提取（实验）</option></select></label>
-            <label>V2 输入与输出总预算 <input id="outline-context-tokens" type="number" min="8192" max="1048576" step="1024" value="131072">（应用策略，需与实际服务容量匹配）</label>
-            <label for="outline-objective">学习方向（可选）</label>
-            <input id="outline-objective" maxlength="300" placeholder="例如：理解 TCP 的可靠传输">
-            <button id="outline-create" class="primary-button" type="submit">生成可审核清单</button>
-          </form>
-          <label>已保存清单 <select id="outline-list" aria-label="已保存的学习清单"></select></label>
-          <p id="outline-status" class="request-status" role="status"></p>
-          <div id="outline-detail"></div>
-        </section>
+        <p class="practice-hint">生成学习清单：在阅读区打开资料，使用“自主学习清单”。大文件按批生成，每批完成后可继续。</p>
         <h3>已加入的学习计划</h3>
         <div id="learning-list" aria-live="polite"></div>
       </section>

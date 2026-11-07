@@ -275,41 +275,6 @@ class OutlineGroupTests(unittest.TestCase):
         self.decide(rows(self.store, identity)[1][0], 'rejected')
         self.assertEqual(self.counts(), before)
 
-    def test_http_generate_review_refresh_and_duplicate_post(self):
-        app = create_app(self.root / 'uploads', self.practice.path)
-        collection = self.library.create('HTTP scope', 'root')['id']
-        with TestClient(app) as client:
-            response = client.post(f'/api/documents?collection_id={collection}', files=[('files', ('tcp.md', TEXT.encode(), 'text/markdown'))])
-            self.assertEqual(response.status_code, 201, response.text)
-            document = client.get(f"/api/documents/{response.json()[0]['id']}").json()
-        from sources import load_sources
-        path = next((self.root / 'uploads').glob('*/*.md'))
-        self.source = load_sources([path])[0]
-        self.snapshots = [{'document_id': document['id'], 'source_id': self.source.source_id,
-                           'path': str(path), 'name': 'tcp.md', 'text': TEXT}]
-        fixture_id = self.create(collection=collection)
-        with patch('outline_service._request_structured', side_effect=fake_model):
-            fixtures.run_outline(self.store, fixture_id, self.current)
-        app = create_app(self.root / 'uploads', self.practice.path)
-        with TestClient(app) as client:
-            ids = [c['id'] for c in self.store.get(fixture_id)['candidates'][:2]]
-            result = GroupDraft(suggestions=[GroupProposal(kind='same_knowledge', candidate_ids=ids,
-                name='HTTP group', reason='Reviewable evidence', canonical_id=None)], note='Mock interface')
-            with patch('outline_grouping._request_structured', side_effect=lambda messages, schema: page_fixture(messages, result)):
-                payload = {'request_id': 'group-api', 'candidate_ids': ids, 'response_language': 'en'}
-                response = client.post(f'/api/outlines/{fixture_id}/grouping', json=payload)
-                self.assertEqual(response.status_code, 202, response.text)
-                self.assertEqual(client.post(f'/api/outlines/{fixture_id}/grouping', json=payload).json(), response.json())
-                wait_for(lambda: client.get('/internal/metrics').json()['held_slots'] == 0)
-            job = client.get(f'/api/outlines/{fixture_id}').json()
-            group = job['grouping']['suggestions'][0]
-            payload = {k: group['proposal'][k] for k in ('name', 'reason', 'canonical_id')}
-            payload.update(revision=group['revision'], decision='accepted')
-            url = f"/api/outline-groups/{group['id']}"
-            approved = client.patch(url, json=payload)
-            self.assertEqual(approved.status_code, 200, approved.text)
-            self.assertEqual(client.patch(url, json=payload).json(), approved.json())
-            self.assertEqual(client.get(f'/api/outlines/{fixture_id}').json()['grouping']['suggestions'][0]['status'], 'accepted')
 
     def test_forged_evidence_outside_original_visibility_is_not_sent_to_group_model(self):
         identity, c = self.generated()

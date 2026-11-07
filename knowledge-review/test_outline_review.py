@@ -266,18 +266,6 @@ class SourceReviewTests(unittest.TestCase):
         with self.assertRaises(OutlineBusy): apply_source_review(self.store, self.review, 1, self.current)
         self.assertEqual(self.counts(), [0] * 5)
 
-    def test_recovery_processing_and_http_contract(self):
-        self.begin()
-        self.assertTrue(public_outline(self.store, self.outline, self.current)['processing'])
-        with self.practice.transaction() as db: db.execute("UPDATE outline_reviews SET status='running',attempt='lost' WHERE id=?", (self.review,))
-        self.assertEqual(public_source_reviews(OutlineStore(self.practice), self.outline)[0]['status'], 'failed')
-        app = create_app(self.root / 'uploads')
-        with TestClient(app) as client:
-            self.assertEqual(client.post('/api/outline-groups/missing/source-reviews', json={'request_id': 'x'}).status_code, 404)
-            self.assertEqual(client.post('/api/outline-source-reviews/missing/pause').status_code, 404)
-            self.assertEqual(client.post('/api/outline-source-reviews/missing/apply', json={'group_revision': 1}).status_code, 404)
-            self.assertEqual(client.post('/api/outline-source-reviews/missing/continue', json={'call_limit': True}).status_code, 422)
-            self.assertEqual(client.post('/api/outline-groups/missing/source-reviews', json={'request_id': 'x', 'paths': ['outside']}).status_code, 422)
 
     def test_web_background_wrapper_auto_reviews_needs_review_only(self):
         self.begin()

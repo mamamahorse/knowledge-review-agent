@@ -1,6 +1,6 @@
 """Disk-backed whole-document retrieval. Only page batches and top hits hold text."""
 from collections import Counter
-from contextlib import closing
+from contextlib import closing,nullcontext
 from dataclasses import asdict
 from hashlib import sha256
 import heapq
@@ -8,7 +8,7 @@ import json
 from math import log1p
 from pathlib import Path
 import sqlite3
-from types import SimpleNamespace
+import time
 from uuid import uuid4
 
 from agent_cancel import checkpoint
@@ -17,7 +17,7 @@ from source_reader import StoredSource,range_chunks,line_count
 from vector_index import get_document_vectors,vector_is_valid
 from retrieval import SearchHit,unit_vector
 from hybrid_retrieval import lexical_tokens,HybridConfig,reciprocal_rank_fusion,TOKENIZER_VERSION
-from outline_store import OutlineStore
+from job_lock import job_lock
 
 
 def encoded(value): return json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':'),allow_nan=False)
@@ -52,9 +52,11 @@ def build(db,path,source,embedder,dimensions,max_chars,min_chars,*,no_cache=Fals
     profile=embedder.cache_profile() if not no_cache else dict(uncached=True,model=embedder.config.model_name,max_tokens=embedder.max_tokens)
     scope=digest(encoded(dict(version=1,algorithm=CHUNK_ALGORITHM,source_id=source.source_id,embedding=profile,
                              dimensions=dimensions,max_chars=max_chars,min_chars=min_chars,lexical=TOKENIZER_VERSION)))
-    owner=SimpleNamespace(practice=SimpleNamespace(path=path))
     computed=reused=0
-    with OutlineStore.lock(owner,scope[:32]):
+    with job_lock(path,scope[:32]):
+        with db:
+            db.execute('CREATE TABLE IF NOT EXISTS ar_access(scope TEXT PRIMARY KEY,last_used REAL NOT NULL)')
+            db.execute('INSERT INTO ar_access VALUES (?,?) ON CONFLICT(scope) DO UPDATE SET last_used=excluded.last_used',(scope,time.time()))
         if rebuild:
             with db:
                 for table in ('ar_terms','ar_entries','ar_runs'): db.execute(f'DELETE FROM {table} WHERE scope=?',(scope,))
@@ -97,7 +99,8 @@ def search(tools,query,top_k,trace):
     if temporary: path=path.with_name('search-'+uuid4().hex+'.sqlite3')
     embedder=tools.embedder; query_vector=unit_vector(embedder.embed_query(query)); dimensions=len(query_vector)
     try:
-        with closing(sqlite3.connect(path,timeout=10)) as db:
+        from cache_maintenance import temporary_use
+        with temporary_use(path) if temporary else nullcontext(),closing(sqlite3.connect(path,timeout=10)) as db:
             db.executescript('''CREATE TABLE IF NOT EXISTS ar_runs(scope TEXT PRIMARY KEY,cursor INTEGER,ready INTEGER);
                 CREATE TABLE IF NOT EXISTS ar_entries(seq INTEGER PRIMARY KEY,scope TEXT,id TEXT,payload TEXT,vector TEXT,checksum TEXT,length INTEGER,UNIQUE(scope,id));
                 CREATE INDEX IF NOT EXISTS ar_scope ON ar_entries(scope);

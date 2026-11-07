@@ -326,26 +326,7 @@ class DirectOutlineApiTests(unittest.TestCase):
         self.assertEqual(response.status_code,201)
         return collection
 
-    def test_api_keeps_v1_default(self):
-        collection = self.prepare()
-        with patch('web_app.run_outline'), patch('model_client.model_settings',return_value=('test',{})), \
-             patch('outline_service.model_settings',return_value=('test',{})):
-            response = self.client.post(f'/api/collections/{collection}/outlines',json=dict(request_id='v1-default'))
-        self.assertEqual(response.status_code,202)
-        self.assertEqual(self.app.state.outline_store.get(response.json()['id'])['plan']['version'],1)
 
-    def test_api_explicit_v2_128k_and_invalid_budget(self):
-        collection = self.prepare()
-        with patch('web_app.run_outline'), patch('model_client.model_settings',return_value=('test',{})), \
-             patch('outline_service.model_settings',return_value=('test',{})):
-            response = self.client.post(f'/api/collections/{collection}/outlines',
-                json=dict(request_id='v2-opt-in',algorithm='v2',context_tokens=131072))
-        self.assertEqual(response.status_code,202)
-        plan = self.app.state.outline_store.get(response.json()['id'])['plan']
-        self.assertEqual(plan['version'],2)
-        self.assertEqual(saved_budget(plan).context_tokens,131072)
-        self.assertEqual(self.client.post(f'/api/collections/{collection}/outlines',
-            json=dict(request_id='bad',algorithm='v2',context_tokens=-1)).status_code,422)
 
     def test_128k_budget_reaches_actual_sdk_not_32k_fallback(self):
         seen=[]

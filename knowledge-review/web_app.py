@@ -3,7 +3,7 @@
 import logging
 import re
 import json
-from contextlib import closing
+from contextlib import closing,ExitStack,asynccontextmanager
 from dataclasses import dataclass, replace
 from html import escape
 from pathlib import Path
@@ -44,10 +44,7 @@ from answers import NoteAnswer, SourceOnlyAnswer, Citation
 from context import format_context
 from structured_output import structured_protocols
 from library_store import LibraryStore
-from outline_store import OutlineStore, OutlineBusy
 from task_routing import TaskRouter, capabilities
-from outline_service import (scope_fingerprint, run_outline, public_outline,
-                             candidate_context, edit_candidate, enroll_candidate, require_current)
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_NOTES_DIR = ROOT / ".data" / "notes"
@@ -263,12 +260,6 @@ class CollectionPracticeRequest(BaseModel):
     response_language: ResponseLanguage = "zh"
 
 
-class OutlineRequest(CollectionPracticeRequest):
-    request_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
-    algorithm: Literal['v1', 'v2'] = 'v1'
-    context_tokens: int | None = Field(default=None, ge=8192, le=1048576)
-
-
 class PlanningRequest(CollectionPracticeRequest):
     request_id: str = Field(min_length=1,max_length=100,pattern=r'^[a-zA-Z0-9_-]+$')
     source_id: str = Field(min_length=1)
@@ -289,86 +280,6 @@ class PlanningExerciseRequest(PlanningResumeRequest):
 
 class PlanningNextBatchRequest(PlanningResumeRequest):
     batch_index: int = Field(ge=2)
-
-
-class OutlineEditRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    learning: LearningDraft
-    revision: int = Field(ge=1)
-
-
-class OutlineEnrollRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    revision: int = Field(ge=1)
-    collection_id: str = "root"
-    unit_id: str | None = None
-    response_language: ResponseLanguage = "zh"
-
-
-class OutlineGroupRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    request_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
-    response_language: ResponseLanguage = "zh"
-    candidate_ids: list[str] | None = None
-    call_limit: int = Field(default=24, ge=1, le=200)
-
-
-class OutlineGroupContinueRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    call_limit: int = Field(default=24, ge=1, le=200)
-
-
-class OutlineGroupReviewRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-    revision: int = Field(ge=1)
-    decision: Literal['proposed', 'accepted', 'rejected']
-    name: str = Field(min_length=1, max_length=160)
-    reason: str = Field(min_length=1, max_length=600)
-    canonical_id: str | None = None
-    unit_id: str | None = None
-
-
-class OutlineSourceReviewRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    request_id: str = Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
-    response_language: ResponseLanguage = 'zh'
-
-
-class OutlineSourceReviewApplyRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-    group_revision: int = Field(ge=1)
-    canonical_id: str | None = None
-    unit_id: str | None = None
-
-
-class OutlineRouteRequest(OutlineGroupRequest):
-    candidate_ids: list[str] | None = Field(default=None, min_length=1)
-
-
-class OutlineRouteEdgeRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid',strict=True)
-    revision: int = Field(ge=1)
-    before_id: str
-    after_id: str
-    kind: Literal['prerequisite','helpful_first','uncertain']
-    reason: str = Field(min_length=1,max_length=350)
-    decision: Literal['proposed','accepted','rejected']
-
-
-class OutlineRouteOrderRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid',strict=True)
-    revision: int = Field(ge=1)
-    order: list[str] | None
-    skipped: list[str]
-
-
-class OutlineRouteAddRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid',strict=True)
-    revision: int = Field(ge=1)
-    before_id: str
-    after_id: str
-    kind: Literal['prerequisite','helpful_first','uncertain']
-    reason: str = Field(min_length=1,max_length=350)
 
 
 class PracticeAnswerRequest(BaseModel):
@@ -459,7 +370,14 @@ def _source_for(document: Document) -> Source:
 def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = None,
                conversation_db: Path | None = None) -> FastAPI:
     streams = StreamRunner()
-    app = FastAPI(title="Knowledge Review", docs_url=None, redoc_url=None, lifespan=streams.lifespan)
+    @asynccontextmanager
+    async def lifespan(app):
+        from cache_maintenance import cleanup
+        db_path=practice_db or (DEFAULT_PRACTICE_DB if notes_dir==DEFAULT_NOTES_DIR else notes_dir.parent/'practice.sqlite3')
+        try: await run_in_threadpool(cleanup,notes_dir.parent,Path(db_path).parent/'embeddings.sqlite3')
+        except (OSError,ValueError): logging.getLogger(__name__).warning('Temporary cleanup skipped.')
+        async with streams.lifespan(app): yield
+    app = FastAPI(title="Knowledge Review", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.stream_runner = streams
 
     @app.get("/internal/metrics")
@@ -480,14 +398,15 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
     catalog.library = library
     practice_store.conversation_path = conversations.path
     conversations.practice_path = practice_store.path
-    outlines = OutlineStore(practice_store)
     app.state.conversation_store = conversations
     app.state.practice_store = practice_store
     app.state.library_store = library
-    app.state.outline_store = outlines
-    from learning_planner import PlanningStore, run_planning
+    from learning_planner import PlanningStore
+    import learning_planner as planning_runtime
     planning = PlanningStore(practice_store.path)
     app.state.planning_store = planning
+    from visual_description_api import install as install_visual_descriptions
+    install_visual_descriptions(app,catalog,_source_for,practice_store,streams,notes_dir.parent)
     templates = Jinja2Templates(directory=ROOT / "web" / "templates")
     app.mount("/static", StaticFiles(directory=ROOT / "web" / "static"), name="static")
 
@@ -549,41 +468,15 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             before_request=lambda: guard_documents(scope_docs, sources),
             document_dependencies=[{'id': d.document_id, 'revision': d.revision} for d in scope_docs]))
 
-    def collection_snapshots(identity):
-        allowed = set(library.descendants(identity))
-        memberships = library.document_memberships()
-        snapshots = []
-        for doc in catalog.list():
-            if memberships.get(doc.document_id, 'root') in allowed:
-                source = _source_for(doc)
-                if isinstance(source,StoredSource):
-                    raise ValueError('此资料使用按页存档，请在阅读区使用自主学习清单；旧集合清单尚不支持该格式。')
-                snapshots.append({'document_id': doc.document_id, 'source_id': source.source_id,
-                                  'path': str(source.path), 'name': doc.name, 'text': source.text, **snapshot_metadata(source)})
-        return snapshots
-
-    def outline_action(action):
+    def planning_action(action):
         try:
             return action()
         except KeyError as exc:
             raise HTTPException(404, detail=str(exc).strip("'")) from exc
-        except (ValueError, OutlineBusy) as exc:
+        except ValueError as exc:
             raise HTTPException(409, detail=str(exc)) from exc
         except (OSError, RuntimeError) as exc:
             raise HTTPException(502, detail='清单处理失败，已有内容保留，可以重试。') from exc
-
-    @app.get('/api/collections/{identity}/outlines')
-    def outline_list(identity: str):
-        def action():
-            library.get(identity)
-            result = outlines.list(identity)
-            fingerprint = scope_fingerprint(collection_snapshots(identity))
-            for row in result:
-                row['stale'] = row.pop('scope_fingerprint') != fingerprint
-                if row['status'] in ('queued', 'running'):
-                    row['status'] = public_outline(outlines, row['id'], collection_snapshots)['status']
-            return result
-        return outline_action(action)
 
     def planning_current(job):
         document_id=job['inputs'].get('document_id')
@@ -693,13 +586,13 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 document_id=identity,document_revision=document.revision,formalize=payload.formalize,visual_coverage=payload.visual_coverage)
             job=planning.get(job_id)
             if job['status']=='queued':
-                background.add_task(run_planning,planning,job_id,lambda:planning_current(planning.get(job_id)))
+                background.add_task(planning_runtime.run_planning,planning,job_id,lambda:planning_current(planning.get(job_id)))
             return {'id':job_id}
-        return outline_action(action)
+        return planning_action(action)
 
     @app.get('/api/learning-plans/{identity}')
     def read_planning(identity:str,batch_index:int | None=None):
-        return outline_action(lambda:public_planning(root_job(identity),batch_index))
+        return planning_action(lambda:public_planning(root_job(identity),batch_index))
 
     @app.post('/api/learning-plans/{identity}/next-batch',status_code=202)
     @streams.detached('planning',resume=True)
@@ -712,11 +605,11 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             if payload.batch_index>job['batch_cursor']+1:
                 if job['status']!='waiting_next' or payload.batch_index!=job['batch_cursor']+2:
                     raise ValueError('请先完成当前批次。')
-                background.add_task(run_planning,planning,identity,
+                background.add_task(planning_runtime.run_planning,planning,identity,
                     lambda:planning_current(planning.get(identity)),next_batch=payload.batch_index,
                     additional_calls=payload.additional_calls)
             return {'id':identity}
-        return outline_action(action)
+        return planning_action(action)
 
     @app.post('/api/learning-plans/{identity}/resume',status_code=202)
     @streams.detached('planning',resume=True)
@@ -725,10 +618,10 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             job=root_job(identity)
             planning_current(job)
             if job['status'] not in ('completed','waiting_next'):
-                background.add_task(run_planning,planning,identity,
+                background.add_task(planning_runtime.run_planning,planning,identity,
                     lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls)
             return {'id':identity}
-        return outline_action(action)
+        return planning_action(action)
 
     @app.post('/api/learning-plans/{identity}/pause')
     def pause_planning(identity:str):
@@ -737,7 +630,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             planning.pause(identity)
             streams.cancel_job('planning',identity)
             return {'id':identity}
-        return outline_action(action)
+        return planning_action(action)
 
     @app.post('/api/learning-plans/{identity}/formalize',status_code=202)
     @streams.detached('planning',resume=True)
@@ -752,10 +645,10 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             if job.get('stage','planning')=='planning' and job['status']!='completed':
                 raise ValueError('请先完成轻量规划。')
             if job.get('stage')!='ready':
-                background.add_task(run_planning,planning,identity,
+                background.add_task(planning_runtime.run_planning,planning,identity,
                     lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls,formalize=True)
             return {'id':identity}
-        return outline_action(action)
+        return planning_action(action)
 
     @app.post('/api/learning-plans/{identity}/questions',status_code=202)
     @streams.detached('planning',resume=True)
@@ -771,223 +664,11 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                     raise ValueError('请先完成本批复查；中断的出题请用继续按钮恢复。')
                 if job.get('batches') and job['status'] not in ('waiting_next','completed'):
                     raise ValueError('请先完成或恢复当前操作，再选择目标出题。')
-                background.add_task(run_planning,planning,identity,
+                background.add_task(planning_runtime.run_planning,planning,identity,
                     lambda:planning_current(planning.get(identity)),additional_calls=payload.additional_calls,
                     question_goal_id=payload.goal_id,question_batch=payload.batch_index)
             return {'id':identity}
-        return outline_action(action)
-
-    @app.post('/api/collections/{identity}/outlines', status_code=202)
-    @streams.detached("outline", resume=False)
-    def create_outline(identity: str, payload: OutlineRequest, background: BackgroundTasks):
-        def action():
-            snapshots = collection_snapshots(identity)
-            if not snapshots:
-                raise ValueError('这个集合及子集合还没有 Markdown 资料，请先导入。')
-            from practice_store import archived_sources
-            load_dotenv(ROOT / '.env')
-            if payload.algorithm == 'v2':
-                from outline_v2 import plan_direct
-                sections, batches, plan = plan_direct(archived_sources(snapshots), snapshots,
-                    payload.objective, payload.response_language, payload.context_tokens)
-            else:
-                if payload.context_tokens is not None:
-                    raise ValueError('V1继续使用原环境预算；context_tokens仅用于V2实验任务。')
-                from outline_context import plan_outline
-                sections, batches, plan = plan_outline(archived_sources(snapshots), snapshots, payload.objective, payload.response_language)
-            job_id = outlines.create(identity, payload.request_id, payload.objective, payload.response_language,
-                scope_fingerprint(snapshots), snapshots, sections, batches, plan)
-            if outlines.get(job_id)['status'] == 'queued':
-                background.add_task(run_outline, outlines, job_id, collection_snapshots)
-            return {'id': job_id}
-        return outline_action(action)
-
-    @app.get('/api/outlines/{identity}')
-    def read_outline(identity: str):
-        return outline_action(lambda: public_outline(outlines, identity, collection_snapshots))
-
-    @app.post('/api/outlines/{identity}/resume', status_code=202)
-    @streams.detached("outline", resume=True)
-    def resume_outline(identity: str, background: BackgroundTasks):
-        def action():
-            with outlines.lock(identity):
-                job = outlines.get(identity)
-                require_current(job, collection_snapshots)
-                outlines.resume(identity)
-                # Reserved before returning: another job cannot take this collection.
-                with practice_store.transaction() as db:
-                    db.execute("UPDATE learning_outlines SET status='queued' WHERE id=?", (identity,))
-            background.add_task(run_outline, outlines, identity, collection_snapshots)
-            return {'id': identity}
-        return outline_action(action)
-
-    @app.post('/api/outlines/{identity}/pause')
-    def pause_outline(identity: str):
-        def action():
-            from outline_final_store import latest, pause
-            review=latest(outlines,identity)
-            if review:
-                pause(outlines,review['id']); streams.cancel_job('final_review',review['id'])
-            outlines.pause(identity); streams.cancel_job('outline', identity)
-            return {'id':identity}
-        return outline_action(action)
-
-    @app.post('/api/outline-final-reviews/{identity}/resume',status_code=202)
-    @streams.detached('final_review',resume=True)
-    def resume_final_outline(identity: str, payload: OutlineGroupContinueRequest, background: BackgroundTasks):
-        def action():
-            from outline_final_store import resume
-            from outline_final_review import run_final_review
-            resume(outlines,identity,collection_snapshots,payload.call_limit)
-            background.add_task(run_final_review,outlines,identity,collection_snapshots)
-            return {'id':identity}
-        return outline_action(action)
-
-    @app.post('/api/outline-final-reviews/{identity}/pause')
-    def pause_final_outline(identity: str):
-        def action():
-            from outline_final_store import record,pause
-            record(outlines,identity); pause(outlines,identity); streams.cancel_job('final_review',identity)
-            return {'id':identity}
-        return outline_action(action)
-
-    @app.patch('/api/outline-candidates/{identity}')
-    def update_outline_candidate(identity: str, payload: OutlineEditRequest):
-        return outline_action(lambda: {'revision': edit_candidate(outlines, identity, payload.learning, payload.revision)})
-
-    @app.post('/api/outlines/{identity}/grouping', status_code=202)
-    @streams.detached("grouping", resume=False)
-    def group_outline(identity: str, payload: OutlineGroupRequest, background: BackgroundTasks):
-        def action():
-            from outline_grouping import start_grouping
-            from outline_review import run_grouping_with_reviews
-            from outline_group_store import get_run
-            load_dotenv(ROOT / '.env')
-            run_id = start_grouping(outlines, identity, payload.request_id, payload.response_language,
-                                    payload.candidate_ids, collection_snapshots, payload.call_limit)
-            if get_run(outlines, run_id)['status'] == 'queued':
-                background.add_task(run_grouping_with_reviews, outlines, run_id, collection_snapshots)
-            return {'id': run_id}
-        return outline_action(action)
-
-    @app.post('/api/outline-group-runs/{identity}/retry', status_code=202)
-    @streams.detached("grouping", resume=True)
-    def retry_outline_grouping(identity: str, background: BackgroundTasks, payload: OutlineGroupContinueRequest):
-        def action():
-            from outline_grouping import retry_grouping
-            from outline_review import run_grouping_with_reviews
-            retry_grouping(outlines, identity, collection_snapshots, payload.call_limit)
-            background.add_task(run_grouping_with_reviews, outlines, identity, collection_snapshots)
-            return {'id': identity}
-        return outline_action(action)
-
-    @app.post('/api/outline-group-runs/{identity}/pause')
-    def pause_outline_grouping(identity: str):
-        def action():
-            from outline_group_store import get_run
-            from outline_group_steps import pause_grouping
-            get_run(outlines, identity)
-            pause_grouping(outlines, identity)
-            streams.cancel_job('grouping', identity)
-            return {'id': identity}
-        return outline_action(action)
-
-    @app.patch('/api/outline-groups/{identity}')
-    def update_outline_group(identity: str, payload: OutlineGroupReviewRequest):
-        def action():
-            from outline_group_store import review_group
-            with closing(practice_store._connect()) as db:
-                row = db.execute('SELECT outline_id FROM outline_groups WHERE id=?', (identity,)).fetchone()
-            if not row:
-                raise KeyError('归组建议不存在。')
-            if payload.decision != 'rejected':
-                require_current(outlines.get(row['outline_id']), collection_snapshots)
-            return {'revision': review_group(outlines, identity, payload.revision, payload.decision,
-                payload.name, payload.reason, payload.canonical_id, payload.unit_id)}
-        return outline_action(action)
-
-    @app.post('/api/outline-groups/{identity}/source-reviews', status_code=202)
-    @streams.detached("review", resume=False)
-    def source_review(identity: str, payload: OutlineSourceReviewRequest, background: BackgroundTasks):
-        def action():
-            from outline_review import start_source_review, run_source_review
-            from outline_review_store import get_review
-            load_dotenv(ROOT / '.env')
-            review_id = start_source_review(outlines, identity, payload.request_id, payload.response_language, collection_snapshots)
-            if get_review(outlines, review_id)['status'] == 'queued':
-                background.add_task(run_source_review, outlines, review_id, collection_snapshots)
-            return {'id': review_id}
-        return outline_action(action)
-
-    @app.post('/api/outline-source-reviews/{identity}/continue', status_code=202)
-    @streams.detached("review", resume=True)
-    def continue_review(identity: str, payload: OutlineGroupContinueRequest, background: BackgroundTasks):
-        def action():
-            from outline_review import continue_source_review, run_source_review
-            continue_source_review(outlines, identity, collection_snapshots, payload.call_limit)
-            background.add_task(run_source_review, outlines, identity, collection_snapshots)
-            return {'id': identity}
-        return outline_action(action)
-
-    @app.post('/api/outline-source-reviews/{identity}/pause')
-    def pause_source_review(identity: str):
-        from outline_review_store import pause_review
-        return outline_action(lambda: (pause_review(outlines, identity), streams.cancel_job('review', identity), {'id': identity})[2])
-
-    @app.post('/api/outline-source-reviews/{identity}/apply')
-    def apply_review(identity: str, payload: OutlineSourceReviewApplyRequest):
-        from outline_review import apply_source_review
-        return outline_action(lambda: {'group_id': apply_source_review(outlines, identity, payload.group_revision,
-            collection_snapshots, payload.canonical_id, payload.unit_id)})
-
-    @app.post('/api/outlines/{identity}/routes',status_code=202)
-    @streams.detached("route", resume=False)
-    def generate_route(identity: str,payload: OutlineRouteRequest,background: BackgroundTasks):
-        def action():
-            from outline_routes import start_route,run_route
-            from outline_route_store import route_record
-            load_dotenv(ROOT/'.env')
-            key=start_route(outlines,identity,payload.request_id,payload.response_language,payload.candidate_ids,collection_snapshots,payload.call_limit)
-            if route_record(outlines,key)['status']=='queued':background.add_task(run_route,outlines,key,collection_snapshots)
-            return {'id':key}
-        return outline_action(action)
-
-    @app.post('/api/outline-routes/{identity}/continue',status_code=202)
-    @streams.detached("route", resume=True)
-    def retry_route(identity: str,payload: OutlineGroupContinueRequest,background: BackgroundTasks):
-        def action():
-            from outline_routes import continue_route,run_route
-            continue_route(outlines,identity,collection_snapshots,payload.call_limit)
-            background.add_task(run_route,outlines,identity,collection_snapshots)
-            return {'id':identity}
-        return outline_action(action)
-
-    @app.post('/api/outline-routes/{identity}/pause')
-    def stop_route(identity: str):
-        from outline_route_store import pause_route
-        return outline_action(lambda:(pause_route(outlines,identity),streams.cancel_job('route',identity),{'id':identity})[2])
-
-    @app.patch('/api/outline-route-edges/{identity}')
-    def review_route_edge(identity: str,payload: OutlineRouteEdgeRequest):
-        from outline_routes import edit_edge
-        return outline_action(lambda:{'revision':edit_edge(outlines,identity,payload.revision,payload.before_id,payload.after_id,
-            payload.kind,payload.reason,payload.decision,collection_snapshots)})
-
-    @app.patch('/api/outline-routes/{identity}/order')
-    def change_route_order(identity: str,payload: OutlineRouteOrderRequest):
-        from outline_routes import save_order
-        return outline_action(lambda:{'revision':save_order(outlines,identity,payload.revision,payload.order,payload.skipped,collection_snapshots)})
-
-    @app.post('/api/outline-routes/{identity}/edges',status_code=201)
-    def add_route_edge(identity: str,payload: OutlineRouteAddRequest):
-        from outline_routes import add_edge
-        return outline_action(lambda:{'id':add_edge(outlines,identity,payload.revision,payload.before_id,payload.after_id,payload.kind,payload.reason,collection_snapshots)})
-
-    @app.post('/api/outline-candidates/{identity}/enroll')
-    @streams.bounded
-    def enroll_outline_candidate(identity: str, payload: OutlineEnrollRequest):
-        return outline_action(lambda: enroll_candidate(outlines, identity, payload.revision, payload.collection_id,
-            payload.unit_id, payload.response_language, collection_snapshots))
+        return planning_action(action)
 
     @app.get("/api/documents/{document_id}")
     def read_document(document_id: str,page:int=1,line_start:int | None=None):
@@ -1105,8 +786,9 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             write_record(progress_path,progress_state)
         def report(value):
             with progress_lock:
-                if progress_path and progress_state['status']=='running':
-                    progress_state.update(value); write_record(progress_path,progress_state)
+                if progress_state['status']=='running':
+                    progress_state.update(value)
+                    if progress_path: write_record(progress_path,progress_state)
         prepared = []
         image_data={}
         if images:
@@ -1124,6 +806,8 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                     with progress_lock:
                         progress_state.update(status='interrupted'); write_record(progress_path,progress_state)
                 raise HTTPException(400,str(exc)) from exc
+        from cache_maintenance import temporary_use
+        staging_leases=ExitStack()
         staged=[]
         imported = []
         published=False
@@ -1133,6 +817,7 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 if (file.filename or '').lower().endswith('.pdf'):
                     folder_id=uuid4().hex
                     folder=notes_dir.parent/'pdf-import-staging'/folder_id; folder.mkdir(parents=True)
+                    staging_leases.enter_context(temporary_use(folder))
                     staged.append(folder)
                     safe_name=DocumentCatalog.prepare_import(file.filename,b'%PDF-')[0]
                     path=folder/safe_name
@@ -1157,8 +842,9 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
                 with progress_lock:
                     progress_state.update(status='completed',phase='published'); write_record(progress_path,progress_state)
         except ValueError as exc:
-            raise HTTPException(400,str(exc)) from exc
+            raise HTTPException(400,f'导入第 {progress_state["file_index"]} 份文件失败（{progress_state["phase"]}）：{exc}') from exc
         finally:
+            staging_leases.close()
             if progress_path and not published:
                 with progress_lock:
                     progress_state.update(status='interrupted'); write_record(progress_path,progress_state)
@@ -1196,10 +882,15 @@ def create_app(notes_dir: Path = DEFAULT_NOTES_DIR, practice_db: Path | None = N
             # Optional legacy converter explicitly retains its full-memory contract.
             return await parse_document_pdf(await run_in_threadpool(path.read_bytes),raw_file,request,force=force)
         def parse():
-            result=parse_pdf_stored(path,notes_dir.parent/'pdf-source-archives',config=config,force=force,
-                                    identity_path=identity_path,raw_file=raw_file,progress=progress)
-            checkpoint()
-            return result
+            from cache_maintenance import temporary_use
+            from job_lock import job_lock
+            from source_reader import file_digest
+            root=notes_dir.parent/'pdf-source-archives'; root.mkdir(parents=True,exist_ok=True)
+            with temporary_use(path.parent,'parser'),job_lock(root/'import-content',file_digest(path)[:32]):
+                result=parse_pdf_stored(path,root,config=config,force=force,
+                                        identity_path=identity_path,raw_file=raw_file,progress=progress)
+                checkpoint()
+                return result
         # Parsing consumes CPU/disk even without VLM. Hold the existing bounded
         # worker until it actually exits, with disconnect cancellation too.
         return await streams.run(parse,request)

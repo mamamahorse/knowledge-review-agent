@@ -249,13 +249,14 @@ function renderAnswer(result, container = $("answer-result")) {
           switchMode('practice');
           $('practice-objective').value = action.objective.slice(0, 300);
           setStatus('practice-status', '已打开原提问文档；请核对资料范围后开始练习或选择已有记录。');
+        } else if (action.destination === 'learning_plan') {
+          await openDocument(action.focus_document_id);
+          switchMode('ask');
+          $('learning-planner-objective').value = action.objective;
+          const panel=$('learning-planner-panel'); panel.open=true;
+          panel.scrollIntoView({behavior:'smooth',block:'center'});
         } else {
           switchMode('learning'); await refreshLearning();
-          if (action.destination === 'outline') {
-            $('outline-objective').value = action.objective.slice(0, 300);
-            $('outline-form').scrollIntoView({behavior: 'smooth', block: 'center'});
-            setStatus('outline-status', '请核对计划集合：清单分析使用此集合及子集合，可能不同于聊天所选资料。');
-          }
         }
       } catch (error) { setStatus('request-status', error.message, true); }
     });
@@ -625,9 +626,15 @@ async function retryChatTurn(id, turnId) {
   await sendChatSubmission(id, { response_language: responseLanguage(), retrieval_mode:$('retrieval-mode').value }, turnId);
 }
 
+let pendingImport = null, importBusy = false;
 async function importFiles(event) {
-  const files = [...event.target.files];
+  if (importBusy) return;
+  const files = event ? [...event.target.files] : (pendingImport?.files || []);
   if (!files.length) return;
+  const targetCollection = event ? state.collectionId : pendingImport.collection;
+  pendingImport = {files, collection:targetCollection};
+  importBusy = true;
+  $('retry-import').hidden = true; $('import-files').disabled = true;
   const data = new FormData();
   files.forEach((file) => data.append(/\.(md|pdf)$/i.test(file.name) ? 'files' : 'images', file, file.webkitRelativePath || file.name));
   setStatus("import-status", `正在导入 ${files.length} 份笔记……`);
@@ -643,18 +650,21 @@ async function importFiles(event) {
     finally { checking = false; }
   }, 1000);
   try {
-    const targetCollection = state.collectionId;
     const imported = await request(`/api/documents?collection_id=${encodeURIComponent(targetCollection)}&import_id=${importId}`, { method: "POST", body: data });
+    pendingImport = null;
     await refreshCatalog();
     if (state.collectionId === targetCollection) await openDocument(imported[0].id);
     setStatus("import-status", `已导入 ${imported.length} 份笔记。`);
   } catch (error) {
-    setStatus("import-status", error.message, true);
+    setStatus("import-status", error.message + '。可重试导入；启用视觉解析时可能重新产生模型调用。刷新页面后需要重新选择文件。', true);
+    $('retry-import').hidden = pendingImport === null;
   } finally {
     importing = false; clearInterval(progress);
-    event.target.value = "";
+    importBusy = false; $('import-files').disabled = false;
+    if (event) event.target.value = "";
   }
 }
+$('retry-import').addEventListener('click', () => importFiles(null));
 
 function switchMode(mode) {
   $("ask-view").hidden = mode !== "ask";

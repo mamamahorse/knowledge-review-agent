@@ -246,23 +246,26 @@ class DetachedApiTests(unittest.TestCase):
         return response.json()
 
     @staticmethod
-    @job_boundary('outline')
+    @job_boundary('planning')
     def blocked(store, identity, current):
         # Read the test gates from the store, retaining real persisted attempts.
-        store.start(identity)
+        state=store.get(identity)
+        state.update(status='running',attempt='controlled')
+        store.save(state)
         store._test_started.set()
         while not store._test_release.wait(.01):
             checkpoint()
-        with store.practice.transaction() as db:
-            db.execute("UPDATE learning_outlines SET status='completed' WHERE id=?", (identity,))
+        state=store.get(identity); state['status']='completed'
+        store.save(state,attempt='controlled')
 
     def prepare_block(self):
-        store = self.app.state.outline_store
+        store = self.app.state.planning_store
         store._test_started, store._test_release = self.started, self.release
-        return patch('web_app.run_outline', side_effect=self.blocked)
+        return patch('learning_planner.run_planning', side_effect=self.blocked)
 
     def submit(self, request='public-one'):
-        return self.client.post('/api/collections/root/outlines', json={'request_id': request})
+        doc=self.client.get('/api/documents/example-retrieval-demo').json()
+        return self.client.post('/api/documents/'+doc['id']+'/learning-plans', json={'request_id':request,'source_id':doc['source_id'],'formalize':False})
 
     def test_202_returns_while_actual_background_slot_remains_held(self):
         with self.prepare_block():
@@ -294,14 +297,14 @@ class DetachedApiTests(unittest.TestCase):
         response = self.submit('must-not-exist')
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.headers['Retry-After'], '1')
-        self.assertEqual(self.app.state.outline_store.list('root'), [])
+        self.assertEqual(self.app.state.planning_store.list_for('example-retrieval-demo'), [])
         self.assertEqual(self.stats()['types']['background']['rejected'], 1)
         self.release.set()
         for future in futures:
             future.result(2)
 
     def test_invalid_scope_releases_preparation_reservation(self):
-        response = self.client.post('/api/collections/missing/outlines', json={'request_id': 'public'})
+        response = self.client.post('/api/documents/missing/learning-plans', json={'request_id':'public','source_id':'missing'})
         self.assertIn(response.status_code, (404, 409))
         self.assertEqual(self.stats()['held_slots'], 0)
         self.assertEqual(self.stats()['types']['background']['submitted'], 0)
@@ -310,15 +313,14 @@ class DetachedApiTests(unittest.TestCase):
         with self.prepare_block():
             identity = self.submit().json()['id']
             self.assertTrue(self.started.wait(1))
-            self.assertEqual(self.client.post(f'/api/outlines/{identity}/pause').status_code, 200)
+            self.assertEqual(self.client.post(f'/api/learning-plans/{identity}/pause').status_code, 200)
             wait_for(lambda: self.stats()['held_slots'] == 0)
-            self.assertEqual(self.app.state.outline_store.get(identity)['status'], 'paused')
+            self.assertEqual(self.app.state.planning_store.get(identity)['status'], 'paused')
             self.assertEqual(self.stats()['types']['background']['cancelled'], 1)
             self.assertEqual(self.stats()['owned_keys'], 0)
 
-    def test_all_eight_submission_endpoints_keep_background_out_of_request_schema(self):
-        names = ('create_outline', 'resume_outline', 'group_outline', 'retry_outline_grouping',
-                 'source_review', 'continue_review', 'generate_route', 'retry_route')
+    def test_learning_submission_endpoints_keep_background_out_of_request_schema(self):
+        names = ('create_planning', 'resume_planning', 'next_planning_batch', 'formalize_planning', 'planning_question')
         endpoints = {route.endpoint.__name__: route.endpoint for route in self.app.routes if hasattr(route, 'endpoint')}
         for name in names:
             self.assertTrue(hasattr(endpoints[name], '__wrapped__'), name)

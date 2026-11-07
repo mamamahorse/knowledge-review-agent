@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import time
 from contextlib import closing
 from dataclasses import dataclass
 from hashlib import sha256
@@ -56,6 +57,7 @@ def get_document_vectors(
                 line_start INTEGER NOT NULL, line_end INTEGER NOT NULL,
                 input_hash TEXT NOT NULL, vector TEXT NOT NULL, checksum TEXT NOT NULL,
                 PRIMARY KEY (profile_id, chunk_id))""")
+            connection.execute('CREATE TABLE IF NOT EXISTS vector_access(profile_id TEXT,chunk_id TEXT,last_used REAL NOT NULL,PRIMARY KEY(profile_id,chunk_id))')
             vectors = [None] * len(chunks)
             missing = []
             for index, chunk in enumerate(chunks):
@@ -89,6 +91,9 @@ def get_document_vectors(
                              input_hashes[index], encoded, sha256(encoded.encode("utf-8")).hexdigest()),
                         )
                         vectors[index] = vector
+            with connection:
+                connection.executemany('INSERT INTO vector_access VALUES (?,?,?) ON CONFLICT(profile_id,chunk_id) DO UPDATE SET last_used=excluded.last_used',
+                    ((profile_id,chunk.chunk_id,time.time()) for chunk in chunks))
             return IndexResult(vectors, len(chunks) - len(missing), len(missing))
     except sqlite3.Error as exc:
         raise RuntimeError(f"Cannot use vector index {path}: {exc}. Use --no-cache to search without this index.") from exc
